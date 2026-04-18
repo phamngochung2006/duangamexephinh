@@ -60,3 +60,31 @@ struct HieuUngDiem {
         return thoiGianCon > 0;
     }
 };
+struct ToaDo { int x, y; };
+class BanChoiDon {
+public:
+    int  luoi[CauHinh::HANG][CauHinh::COT]{};
+    int  luoiMau[CauHinh::HANG][CauHinh::COT]{};
+    ToaDo khoiHienTai[4], khoiDuPhong[4];
+    int  kieuHienTai = 0;
+    int  kieuTiepTheo = 0;
+    int  diem = 0;
+    bool daGameOver = false;
+    Color mauNguoiChoi;
+    bool dangXoaHang = false;
+    int  demHieuUng = 0;
+    bool hangDay[CauHinh::HANG]{};
+    vector<HieuUngDiem> danhSachHieuUng;
+    int  hangRacCho = 0;
+     void khoiDong(Color mau) {
+        mauNguoiChoi = mau;
+        kieuTiepTheo = rand() % CauHinh::SO_KIEU;
+        diem = 0;
+        daGameOver = false;
+        hangRacCho = 0;
+        danhSachHieuUng.clear();
+        for (int i = 0; i < CauHinh::HANG; i++)
+            for (int j = 0; j < CauHinh::COT; j++)
+                luoi[i][j] = luoiMau[i][j] = 0;
+        taoBienMoi();
+    }
