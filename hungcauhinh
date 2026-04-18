@@ -88,3 +88,127 @@ public:
                 luoi[i][j] = luoiMau[i][j] = 0;
         taoBienMoi();
     }
+ // ----------------------------------------------------------
+    //  Tao khoi moi tren dinh ban choi
+    // ----------------------------------------------------------
+    void taoBienMoi() {
+        kieuHienTai = kieuTiepTheo;
+        kieuTiepTheo = rand() % CauHinh::SO_KIEU;
+        for (int i = 0; i < 4; i++) {
+            khoiHienTai[i].x = dinhNghiaKhoi[kieuHienTai][i] % 2 + CauHinh::COT / 2 - 1;
+            khoiHienTai[i].y = dinhNghiaKhoi[kieuHienTai][i] / 2;
+        }
+        if (!kiemTraHopLe()) daGameOver = true;
+    }
+
+    // ----------------------------------------------------------
+    //  Kiem tra vi tri khoiHienTai co hop le khong
+    // ----------------------------------------------------------
+    bool kiemTraHopLe() {
+        for (int i = 0; i < 4; i++) {
+            int cx = khoiHienTai[i].x, cy = khoiHienTai[i].y;
+            if (cx < 0 || cx >= CauHinh::COT || cy >= CauHinh::HANG) return false;
+            if (cy >= 0 && luoi[cy][cx]) return false;
+        }
+        return true;
+    }
+
+    // ----------------------------------------------------------
+    //  Khoa khoi xuong luoi khi cham day (dung khoiDuPhong)
+    // ----------------------------------------------------------
+    void khoaKhoiXuongLuoi() {
+        for (int i = 0; i < 4; i++) {
+            luoi[khoiDuPhong[i].y][khoiDuPhong[i].x] = 1;
+            luoiMau[khoiDuPhong[i].y][khoiDuPhong[i].x] = kieuHienTai + 1;
+        }
+    }
+
+    // ----------------------------------------------------------
+    //  Dem va danh dau cac hang da day
+    // ----------------------------------------------------------
+    int demHangDay() {
+        int soHang = 0;
+        for (int i = 0; i < CauHinh::HANG; i++) {
+            int soO = 0;
+            for (int j = 0; j < CauHinh::COT; j++) if (luoi[i][j]) soO++;
+            hangDay[i] = (soO == CauHinh::COT);
+            if (hangDay[i]) soHang++;
+        }
+        return soHang;
+    }
+
+    // ----------------------------------------------------------
+    //  Xoa cac hang da day, don cac hang con lai xuong duoi
+    // ----------------------------------------------------------
+    void xoaHangDayVaDon() {
+        int k = CauHinh::HANG - 1;
+        for (int i = CauHinh::HANG - 1; i >= 0; i--) {
+            if (!hangDay[i]) {
+                for (int j = 0; j < CauHinh::COT; j++) {
+                    luoi[k][j] = luoi[i][j];
+                    luoiMau[k][j] = luoiMau[i][j];
+                }
+                k--;
+            }
+        }
+    }
+// ----------------------------------------------------------
+    //  Tinh diem theo so hang xoa duoc
+    // ----------------------------------------------------------
+    int tinhDiemTheoSoHang(int soHang) {
+        switch (soHang) {
+        case 1:  return 100;
+        case 2:  return 300;
+        case 3:  return 600;
+        case 4:  return 1000;
+        default: return 0;
+        }
+    }
+
+    // ----------------------------------------------------------
+    //  Cap nhat 1 buoc roi (goi moi tick game)
+    //  Tra ve so hang da xoa - de xu ly gui rac o che do doi khang
+    // ----------------------------------------------------------
+    int buocRoi(float viTriNgang) {
+        // Dang trong animation xoa hang -> dem lui, het thi don luoi
+        if (dangXoaHang) {
+            if (--demHieuUng <= 0) {
+                xoaHangDayVaDon();
+                dangXoaHang = false;
+            }
+            return 0;
+        }
+
+        // Thu di chuyen khoi xuong 1 o
+        for (int i = 0; i < 4; i++) {
+            khoiDuPhong[i] = khoiHienTai[i];
+            khoiHienTai[i].y++;
+        }
+
+        // Neu khong hop le -> khoa khoi, kiem tra xoa hang, tao bien moi
+        if (!kiemTraHopLe()) {
+            for (int i = 0; i < 4; i++) khoiHienTai[i] = khoiDuPhong[i];
+            khoaKhoiXuongLuoi();
+
+            int soHangXoa = demHangDay();
+            if (soHangXoa > 0) {
+                dangXoaHang = true;
+                demHieuUng = 2;
+                int diemKiemDuoc = tinhDiemTheoSoHang(soHangXoa);
+                diem += diemKiemDuoc;
+
+                float ex = viTriNgang + (CauHinh::COT * CauHinh::O_SIZE) / 2.f;
+                float ey = CauHinh::HANG * CauHinh::O_SIZE / 2.f;
+                danhSachHieuUng.push_back(HieuUngDiem(ex, ey, diemKiemDuoc));
+                if (soHangXoa == 4) {
+                    danhSachHieuUng.push_back(HieuUngDiem(ex - 20, ey + 30, 0));
+                    danhSachHieuUng.back().noiDung = "TETRIS!";
+                }
+            }
+            taoBienMoi();
+            return soHangXoa;
+        }
+        return 0;
+    }
+
+
