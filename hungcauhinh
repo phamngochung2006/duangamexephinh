@@ -210,5 +210,117 @@ public:
         }
         return 0;
     }
+  // ----------------------------------------------------------
+    void diChuyen(int dx) {
+        for (int i = 0; i < 4; i++) { khoiDuPhong[i] = khoiHienTai[i]; khoiHienTai[i].x += dx; }
+        if (!kiemTraHopLe()) for (int i = 0; i < 4; i++) khoiHienTai[i] = khoiDuPhong[i];
+    }
+ 
+    void xoay() {
+        ToaDo tamXoay = khoiHienTai[1];
+        for (int i = 0; i < 4; i++) {
+            int dx = khoiHienTai[i].y - tamXoay.y;
+            int dy = khoiHienTai[i].x - tamXoay.x;
+            khoiDuPhong[i]   = khoiHienTai[i];
+            khoiHienTai[i].x = tamXoay.x - dx;
+            khoiHienTai[i].y = tamXoay.y + dy;
+        }
+        if (!kiemTraHopLe()) for (int i = 0; i < 4; i++) khoiHienTai[i] = khoiDuPhong[i];
+    }
+ 
+    void reNhanh() {
+        while (true) {
+            for (int i = 0; i < 4; i++) { khoiDuPhong[i] = khoiHienTai[i]; khoiHienTai[i].y++; }
+            if (!kiemTraHopLe()) { for (int i = 0; i < 4; i++) khoiHienTai[i] = khoiDuPhong[i]; break; }
+        }
+    }
+ 
+    // ----------------------------------------------------------
+    //  Tinh vi tri bong (ghost piece) de hien thi
+    // ----------------------------------------------------------
+    void tinhViTriBong(ToaDo bong[4]) {
+        for (int i = 0; i < 4; i++) bong[i] = khoiHienTai[i];
+        ToaDo tam[4];
+        while (true) {
+            for (int i = 0; i < 4; i++) { tam[i] = bong[i]; bong[i].y++; }
+            bool hopLe = true;
+            for (int i = 0; i < 4; i++) {
+                if (bong[i].x < 0 || bong[i].x >= CauHinh::COT || bong[i].y >= CauHinh::HANG)
+                    { hopLe = false; break; }
+                if (bong[i].y >= 0 && luoi[bong[i].y][bong[i].x])
+                    { hopLe = false; break; }
+            }
+            if (!hopLe) { for (int i = 0; i < 4; i++) bong[i] = tam[i]; break; }
+        }
+    }
+ 
+    // ----------------------------------------------------------
+    //  Nhan hang rac tu doi thu (che do doi khang)
+    // ----------------------------------------------------------
+    void nhanHangRac(int soHang) {
+        if (soHang <= 0) return;
+        for (int i = 0; i < CauHinh::HANG - soHang; i++)
+            for (int j = 0; j < CauHinh::COT; j++) {
+                luoi[i][j]    = luoi[i + soHang][j];
+                luoiMau[i][j] = luoiMau[i + soHang][j];
+            }
+        int viTriLo = rand() % CauHinh::COT;
+        for (int i = CauHinh::HANG - soHang; i < CauHinh::HANG; i++)
+            for (int j = 0; j < CauHinh::COT; j++) {
+                luoi[i][j]    = (j == viTriLo) ? 0 : 1;
+                luoiMau[i][j] = (j == viTriLo) ? 0 : CauHinh::MAU_RAC;
+            }
+        for (int k = 0; k < soHang; k++) {
+            bool biChong = false;
+            for (int i = 0; i < 4; i++)
+                if (khoiHienTai[i].y >= 0 && khoiHienTai[i].y < CauHinh::HANG
+                    && luoi[khoiHienTai[i].y][khoiHienTai[i].x])
+                    { biChong = true; break; }
+            if (biChong) for (int i = 0; i < 4; i++) khoiHienTai[i].y--;
+        }
+    }
+ 
+    void capNhatHieuUng(float dt) {
+        for (int i = (int)danhSachHieuUng.size() - 1; i >= 0; i--)
+            if (!danhSachHieuUng[i].capNhat(dt))
+                danhSachHieuUng.erase(danhSachHieuUng.begin() + i);
+    }
+ 
+    // ----------------------------------------------------------
+    //  LUU / NAP TRANG THAI
+    // ----------------------------------------------------------
+    void luuTrangThai(ofstream& f) {
+        for (int i = 0; i < CauHinh::HANG; i++)
+            for (int j = 0; j < CauHinh::COT; j++) {
+                ghiSoNguyen(f, luoi[i][j]);
+                ghiSoNguyen(f, luoiMau[i][j]);
+            }
+        for (int i = 0; i < 4; i++) {
+            ghiSoNguyen(f, khoiHienTai[i].x);
+            ghiSoNguyen(f, khoiHienTai[i].y);
+        }
+        ghiSoNguyen(f, kieuHienTai);
+        ghiSoNguyen(f, kieuTiepTheo);
+        ghiSoNguyen(f, diem);
+    }
+ 
+    void napTrangThai(ifstream& f) {
+        for (int i = 0; i < CauHinh::HANG; i++)
+            for (int j = 0; j < CauHinh::COT; j++) {
+                luoi[i][j]    = docSoNguyen(f);
+                luoiMau[i][j] = docSoNguyen(f);
+            }
+        for (int i = 0; i < 4; i++) {
+            khoiHienTai[i].x = docSoNguyen(f);
+            khoiHienTai[i].y = docSoNguyen(f);
+        }
+        kieuHienTai  = docSoNguyen(f);
+        kieuTiepTheo = docSoNguyen(f);
+        diem         = docSoNguyen(f);
+        daGameOver   = false;
+        dangXoaHang  = false;
+        hangRacCho   = 0;
+        danhSachHieuUng.clear();
+    }
 
 
