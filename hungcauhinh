@@ -482,4 +482,173 @@ void chayKiemThu() {
     if (thatBai > 0) { cerr << "Co kiem thu THAT BAI.\n"; exit(1); }
 }
 #endif
+//  CLASS TROCHOI - quan ly vong lap chinh va cac che do choi
+// ============================================================
+class TroChoi {
+    RenderWindow cuaSo;
+    Font phongChu;
+ 
+    enum class TrangThaiGame {
+        Menu, ChonTocDo,
+        Choi1Nguoi, Choi2Nguoi, DoiKhang,
+        HuongDan, KyLuc
+    };
+    TrangThaiGame trangThai = TrangThaiGame::Menu;
+ 
+    BanChoiDon nguoiChoi1, nguoiChoi2;
+    Clock dongHo;
+    float thoiGianTich = 0, dt = 0;
+    int   diemKyLuc    = 0;
+    int   mucTocDo     = 1;
+    bool  cho2Nguoi    = false;
+    bool  choDoiKhang  = false;
+ 
+    // Trang thai chet rieng biet: cho phep nguoi con lai choi tiep
+    bool nguoiChoi1DaThua = false;
+    bool nguoiChoi2DaThua = false;
+ 
+    // --- Toa do cac ban choi ---
+    static constexpr int BAN_1P_X     = 200;
+    static constexpr int PANEL_1P_X   = 210 + CauHinh::COT * CauHinh::O_SIZE + 10;
+ 
+    static constexpr int BAN_2P_1_X   = 20;
+    static constexpr int PANEL_2P_1_X = 20  + CauHinh::COT * CauHinh::O_SIZE + 5;
+    static constexpr int BAN_2P_2_X   = 450;
+    static constexpr int PANEL_2P_2_X = 450 + CauHinh::COT * CauHinh::O_SIZE + 5;
+ 
+    static constexpr int BAN_DK_1_X   = 10;
+    static constexpr int PANEL_DK_1_X = 10  + CauHinh::COT * CauHinh::O_SIZE + 5;
+    static constexpr int BAN_DK_2_X   = 440;
+    static constexpr int PANEL_DK_2_X = 440 + CauHinh::COT * CauHinh::O_SIZE + 5;
+ 
+    // ----------------------------------------------------------
+    void docKyLuc() {
+        try { ifstream f(CauHinh::FILE_KY_LUC); if (f) f >> diemKyLuc; }
+        catch (...) { diemKyLuc = 0; }
+    }
+ 
+    void luuKyLuc(int diem) {
+        try {
+            if (diem > diemKyLuc) {
+                diemKyLuc = diem;
+                ofstream f(CauHinh::FILE_KY_LUC);
+                if (f) f << diemKyLuc;
+            }
+        } catch (...) {}
+    }
+ 
+    void luuGame1Nguoi() {
+        try {
+            ofstream f(CauHinh::FILE_LUU_1P, ios::binary); if (!f) return;
+            nguoiChoi1.luuTrangThai(f);
+            ghiSoNguyen(f, mucTocDo);
+        } catch (...) {}
+    }
+ 
+    bool napGame1Nguoi() {
+        try {
+            ifstream f(CauHinh::FILE_LUU_1P, ios::binary); if (!f) return false;
+            nguoiChoi1.khoiDong(Color(50,220,80));
+            nguoiChoi1.napTrangThai(f);
+            mucTocDo = docSoNguyen(f);
+            if (mucTocDo < 0 || mucTocDo > 2) mucTocDo = 1;
+            return true;
+        } catch (...) { return false; }
+    }
+ 
+    void luuGame2Nguoi() {
+        try {
+            ofstream f(CauHinh::FILE_LUU_2P, ios::binary); if (!f) return;
+            nguoiChoi1.luuTrangThai(f);
+            nguoiChoi2.luuTrangThai(f);
+            ghiSoNguyen(f, mucTocDo);
+        } catch (...) {}
+    }
+ 
+    bool napGame2Nguoi() {
+        try {
+            ifstream f(CauHinh::FILE_LUU_2P, ios::binary); if (!f) return false;
+            nguoiChoi1.khoiDong(Color(50,220,80));
+            nguoiChoi2.khoiDong(Color(220,80,80));
+            nguoiChoi1.napTrangThai(f);
+            nguoiChoi2.napTrangThai(f);
+            mucTocDo = docSoNguyen(f);
+            if (mucTocDo < 0 || mucTocDo > 2) mucTocDo = 1;
+            return true;
+        } catch (...) { return false; }
+    }
+ 
+    void xoaFileLuu(const char* duong_dan) { remove(duong_dan); }
+ 
+    bool coFileLuu1P() { ifstream f(CauHinh::FILE_LUU_1P, ios::binary); return f.good(); }
+    bool coFileLuu2P() { ifstream f(CauHinh::FILE_LUU_2P, ios::binary); return f.good(); }
+ 
+    void veChuLen(const string& noi_dung, int x, int y, int co_chu = 20, Color mau = Color::White) {
+        Text t(noi_dung, phongChu, co_chu);
+        t.setPosition((float)x, (float)y);
+        t.setFillColor(mau);
+        cuaSo.draw(t);
+    }
+ 
+    // Overlay "THUA" len ban cua nguoi da thua khi nguoi kia van choi tiep
+    void veOverlayDaThua(int viTriNgang, const string& dongChu2) {
+        RectangleShape man(Vector2f(CauHinh::COT * CauHinh::O_SIZE, CauHinh::HANG * CauHinh::O_SIZE));
+        man.setPosition(viTriNgang, 0);
+        man.setFillColor(Color(0, 0, 0, 180));
+        cuaSo.draw(man);
+ 
+        Text chuThua("THUA", phongChu, 32);
+        chuThua.setFillColor(Color(220, 60, 60));
+        chuThua.setPosition(
+            viTriNgang + CauHinh::COT * CauHinh::O_SIZE / 2.f - chuThua.getLocalBounds().width / 2.f,
+            CauHinh::HANG * CauHinh::O_SIZE / 2.f - 20);
+        cuaSo.draw(chuThua);
+ 
+        Text chuCho(dongChu2, phongChu, 14);
+        chuCho.setFillColor(Color(200, 200, 200));
+        chuCho.setPosition(
+            viTriNgang + CauHinh::COT * CauHinh::O_SIZE / 2.f - chuCho.getLocalBounds().width / 2.f,
+            CauHinh::HANG * CauHinh::O_SIZE / 2.f + 22);
+        cuaSo.draw(chuCho);
+    }
+ 
+    void veMuiTenDoiKhangGiua() {
+        int cx = 415, cy = CauHinh::HANG * CauHinh::O_SIZE / 2;
+        RectangleShape thanh(Vector2f(30, 4));
+        thanh.setFillColor(Color(200, 200, 60));
+        thanh.setPosition(cx - 15, cy - 2);
+        cuaSo.draw(thanh);
+ 
+        ConvexShape dauTrai; dauTrai.setPointCount(3);
+        dauTrai.setPoint(0,{0,0}); dauTrai.setPoint(1,{10,-7}); dauTrai.setPoint(2,{10,7});
+        dauTrai.setFillColor(Color(200, 200, 60));
+        dauTrai.setPosition(cx - 15, cy);
+        cuaSo.draw(dauTrai);
+ 
+        ConvexShape dauPhai; dauPhai.setPointCount(3);
+        dauPhai.setPoint(0,{10,0}); dauPhai.setPoint(1,{0,-7}); dauPhai.setPoint(2,{0,7});
+        dauPhai.setFillColor(Color(200, 200, 60));
+        dauPhai.setPosition(cx + 5, cy);
+        cuaSo.draw(dauPhai);
+    }
+ 
+    // ----------------------------------------------------------
+    void batDauGame() {
+        nguoiChoi1DaThua = false;
+        nguoiChoi2DaThua = false;
+        if (choDoiKhang) {
+            nguoiChoi1.khoiDong(Color(50,220,80));
+            nguoiChoi2.khoiDong(Color(220,80,80));
+            trangThai = TrangThaiGame::DoiKhang;
+        } else if (!cho2Nguoi) {
+            nguoiChoi1.khoiDong(Color(50,220,80));
+            trangThai = TrangThaiGame::Choi1Nguoi;
+        } else {
+            nguoiChoi1.khoiDong(Color(50,220,80));
+            nguoiChoi2.khoiDong(Color(220,80,80));
+            trangThai = TrangThaiGame::Choi2Nguoi;
+        }
+        thoiGianTich = 0;
+    }
+ 
 
