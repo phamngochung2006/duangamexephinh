@@ -323,4 +323,163 @@ public:
         danhSachHieuUng.clear();
     }
 
+    // ----------------------------------------------------------
+    //  VE BAN CHOI
+    // ----------------------------------------------------------
+    void veBanChoi(RenderWindow& cua_so, int viTriNgang, Font& phong_chu) {
+        RectangleShape nen(Vector2f(CauHinh::COT * CauHinh::O_SIZE, CauHinh::HANG * CauHinh::O_SIZE));
+        nen.setPosition(viTriNgang, 0);
+        nen.setFillColor(Color(15, 15, 30));
+        cua_so.draw(nen);
+ 
+        RectangleShape duongDoc(Vector2f(1, CauHinh::HANG * CauHinh::O_SIZE));
+        duongDoc.setFillColor(Color(40, 40, 60));
+        for (int j = 1; j < CauHinh::COT; j++) {
+            duongDoc.setPosition(viTriNgang + j * CauHinh::O_SIZE, 0);
+            cua_so.draw(duongDoc);
+        }
+        RectangleShape duongNgang(Vector2f(CauHinh::COT * CauHinh::O_SIZE, 1));
+        duongNgang.setFillColor(Color(40, 40, 60));
+        for (int i = 1; i < CauHinh::HANG; i++) {
+            duongNgang.setPosition(viTriNgang, i * CauHinh::O_SIZE);
+            cua_so.draw(duongNgang);
+        }
+ 
+        RectangleShape o(Vector2f(CauHinh::O_SIZE - 2.f, CauHinh::O_SIZE - 2.f));
+        for (int i = 0; i < CauHinh::HANG; i++)
+            for (int j = 0; j < CauHinh::COT; j++) {
+                if (!luoi[i][j]) continue;
+                int ci = luoiMau[i][j] - 1;
+                Color mauO;
+                if (ci == CauHinh::MAU_RAC - 1) mauO = Color(100, 100, 100);
+                else mauO = (ci >= 0 && ci < CauHinh::SO_KIEU) ? bangMauKhoi[ci] : mauNguoiChoi;
+                if (dangXoaHang && hangDay[i])
+                    mauO = (demHieuUng % 3 == 0) ? Color::White
+                                                 : Color(mauO.r/2, mauO.g/2, mauO.b/2);
+                o.setFillColor(mauO);
+                o.setPosition(viTriNgang + j * CauHinh::O_SIZE + 1, i * CauHinh::O_SIZE + 1);
+                cua_so.draw(o);
+                RectangleShape sang(Vector2f(CauHinh::O_SIZE - 2.f, 3.f));
+                sang.setFillColor(Color(255, 255, 255, 60));
+                sang.setPosition(viTriNgang + j * CauHinh::O_SIZE + 1, i * CauHinh::O_SIZE + 1);
+                cua_so.draw(sang);
+            }
+ 
+        ToaDo bong[4]; tinhViTriBong(bong);
+        Color mauBong = bangMauKhoi[kieuHienTai]; mauBong.a = 60;
+        o.setFillColor(mauBong);
+        for (int i = 0; i < 4; i++)
+            if (bong[i].y >= 0) {
+                o.setPosition(viTriNgang + bong[i].x * CauHinh::O_SIZE + 1,
+                               bong[i].y * CauHinh::O_SIZE + 1);
+                cua_so.draw(o);
+            }
+ 
+        Color mauKhoi = bangMauKhoi[kieuHienTai]; mauKhoi.a = 255;
+        o.setFillColor(mauKhoi);
+        for (int i = 0; i < 4; i++)
+            if (khoiHienTai[i].y >= 0) {
+                o.setPosition(viTriNgang + khoiHienTai[i].x * CauHinh::O_SIZE + 1,
+                               khoiHienTai[i].y * CauHinh::O_SIZE + 1);
+                cua_so.draw(o);
+                RectangleShape sang(Vector2f(CauHinh::O_SIZE - 2.f, 3.f));
+                sang.setFillColor(Color(255, 255, 255, 80));
+                sang.setPosition(viTriNgang + khoiHienTai[i].x * CauHinh::O_SIZE + 1,
+                                  khoiHienTai[i].y * CauHinh::O_SIZE + 1);
+                cua_so.draw(sang);
+            }
+ 
+        RectangleShape khung(Vector2f(CauHinh::COT * CauHinh::O_SIZE, CauHinh::HANG * CauHinh::O_SIZE));
+        khung.setPosition(viTriNgang, 0);
+        khung.setFillColor(Color::Transparent);
+        khung.setOutlineThickness(2);
+        khung.setOutlineColor(Color(100, 100, 160));
+        cua_so.draw(khung);
+    }
+ 
+    // ----------------------------------------------------------
+    void vePanel(RenderWindow& cua_so, int panelX, int panelY, Font& phong_chu, const string& nhan) {
+        RectangleShape nen(Vector2f(130, 310));
+        nen.setPosition(panelX, panelY);
+        nen.setFillColor(Color(20, 20, 40, 200));
+        nen.setOutlineThickness(1);
+        nen.setOutlineColor(Color(80, 80, 120));
+        cua_so.draw(nen);
+ 
+        auto veChu = [&](const string& s, int x, int y, int cz, Color c) {
+            Text t(s, phong_chu, cz); t.setPosition((float)x, (float)y); t.setFillColor(c); cua_so.draw(t);
+        };
+        veChu(nhan,                 panelX+10, panelY+8,  16, mauNguoiChoi);
+        veChu("DIEM",               panelX+10, panelY+35, 12, Color(160,160,200));
+        veChu(to_string(diem),      panelX+10, panelY+52, 22, Color::White);
+        veChu("TIEP THEO",          panelX+10, panelY+90, 12, Color(160,160,200));
+ 
+        int coChuKhoi = 22;
+        ToaDo xemTruoc[4];
+        for (int i = 0; i < 4; i++) {
+            xemTruoc[i].x = dinhNghiaKhoi[kieuTiepTheo][i] % 2;
+            xemTruoc[i].y = dinhNghiaKhoi[kieuTiepTheo][i] / 2;
+        }
+        RectangleShape oXem(Vector2f(coChuKhoi - 2.f, coChuKhoi - 2.f));
+        oXem.setFillColor(bangMauKhoi[kieuTiepTheo]);
+        int gocX = panelX + 30, gocY = panelY + 115;
+        for (int i = 0; i < 4; i++) {
+            oXem.setPosition(gocX + xemTruoc[i].x * coChuKhoi, gocY + xemTruoc[i].y * coChuKhoi);
+            cua_so.draw(oXem);
+        }
+ 
+        if (hangRacCho > 0)
+            veChu("RAC: " + to_string(hangRacCho), panelX+10, panelY+190, 13, Color(255,80,80));
+    }
+ 
+    // ----------------------------------------------------------
+    void veHieuUngDiem(RenderWindow& cua_so, Font& phong_chu) {
+        for (auto& hu : danhSachHieuUng) {
+            bool laTetris = (hu.noiDung == "TETRIS!");
+            Text t(hu.noiDung, phong_chu, laTetris ? 26 : 22);
+            Uint8 doMo = (Uint8)max(0.f, hu.doMo);
+            t.setFillColor(laTetris ? Color(255,220,0,doMo) : Color(100,255,100,doMo));
+            t.setOutlineColor(Color(0,0,0,doMo));
+            t.setOutlineThickness(2);
+            t.setPosition(hu.x - t.getLocalBounds().width / 2.f, hu.y);
+            cua_so.draw(t);
+        }
+    }
+};
+// ============================================================
+//  UNIT TEST
+// ============================================================
+#ifdef CHAY_TEST
+void chayKiemThu() {
+    cout << "======= KIEM THU =======\n";
+    int quaDuoc = 0, thatBai = 0;
+    {
+        BanChoiDon b; b.khoiDong(Color::White);
+        bool ok = true;
+        for (int i = 0; i < CauHinh::HANG; i++)
+            for (int j = 0; j < CauHinh::COT; j++)
+                if (b.luoi[i][j] != 0) { ok = false; break; }
+        if (ok) { cout << "[PASS] khoiDong() xoa sach luoi\n";         quaDuoc++; }
+        else    { cout << "[FAIL] khoiDong() luoi chua duoc xoa\n";    thatBai++; }
+    }
+    {
+        BanChoiDon b; b.khoiDong(Color::White);
+        for (int i = 0; i < 20; i++) b.diChuyen(-1);
+        bool ok = true;
+        for (int i = 0; i < 4; i++) if (b.khoiHienTai[i].x < 0) { ok = false; break; }
+        if (ok) { cout << "[PASS] diChuyen() khong vuot bien trai\n";  quaDuoc++; }
+        else    { cout << "[FAIL] diChuyen() vuot bien trai\n";        thatBai++; }
+    }
+    {
+        BanChoiDon b; b.khoiDong(Color::White);
+        for (int i = 0; i < 20; i++) b.diChuyen(1);
+        bool ok = true;
+        for (int i = 0; i < 4; i++) if (b.khoiHienTai[i].x >= CauHinh::COT) { ok = false; break; }
+        if (ok) { cout << "[PASS] diChuyen() khong vuot bien phai\n";  quaDuoc++; }
+        else    { cout << "[FAIL] diChuyen() vuot bien phai\n";        thatBai++; }
+    }
+    cout << "\nKet qua: " << quaDuoc << " qua, " << thatBai << " that bai\n";
+    if (thatBai > 0) { cerr << "Co kiem thu THAT BAI.\n"; exit(1); }
+}
+#endif
 
