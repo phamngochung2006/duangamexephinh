@@ -650,5 +650,119 @@ class TroChoi {
         }
         thoiGianTich = 0;
     }
+ //  XU LY PHIM NHAN
+    // ----------------------------------------------------------
+    void xuLyPhimNhan(Event& su_kien) {
+        using KB = Keyboard;
+        using TS = TrangThaiGame;
+ 
+        if (trangThai == TS::Menu) {
+            if (su_kien.key.code == KB::Num1) { cho2Nguoi=false; choDoiKhang=false; trangThai=TS::ChonTocDo; }
+            if (su_kien.key.code == KB::Num2) { cho2Nguoi=true;  choDoiKhang=false; trangThai=TS::ChonTocDo; }
+            if (su_kien.key.code == KB::Num3) { cho2Nguoi=false; choDoiKhang=true;  trangThai=TS::ChonTocDo; }
+            if (su_kien.key.code == KB::Num4) trangThai = TS::HuongDan;
+            if (su_kien.key.code == KB::Num5) trangThai = TS::KyLuc;
+            if (su_kien.key.code == KB::Num6) cuaSo.close();
+            if (su_kien.key.code == KB::Num7 && coFileLuu1P())
+                if (napGame1Nguoi()) { trangThai = TS::Choi1Nguoi; thoiGianTich = 0; }
+            if (su_kien.key.code == KB::Num8 && coFileLuu2P())
+                if (napGame2Nguoi()) { trangThai = TS::Choi2Nguoi; thoiGianTich = 0; }
+        }
+        else if (trangThai == TS::ChonTocDo) {
+            if (su_kien.key.code == KB::Num1) { mucTocDo = 0; batDauGame(); }
+            if (su_kien.key.code == KB::Num2) { mucTocDo = 1; batDauGame(); }
+            if (su_kien.key.code == KB::Num3) { mucTocDo = 2; batDauGame(); }
+            if (su_kien.key.code == KB::Escape) trangThai = TS::Menu;
+        }
+        else {
+            if (su_kien.key.code == KB::Escape) {
+                if (trangThai == TS::Choi1Nguoi) luuGame1Nguoi();
+                if (trangThai == TS::Choi2Nguoi) luuGame2Nguoi();
+                trangThai = TS::Menu;
+            }
+            bool nc1CoTheDiChuyen = (trangThai==TS::Choi1Nguoi ||
+                                     trangThai==TS::Choi2Nguoi ||
+                                     trangThai==TS::DoiKhang) && !nguoiChoi1DaThua;
+            if (nc1CoTheDiChuyen) {
+                if (su_kien.key.code == KB::Left)  nguoiChoi1.diChuyen(-1);
+                if (su_kien.key.code == KB::Right) nguoiChoi1.diChuyen(1);
+                if (su_kien.key.code == KB::Up)    nguoiChoi1.xoay();
+                if (su_kien.key.code == KB::Down)  nguoiChoi1.reNhanh();
+            }
+            bool nc2CoTheDiChuyen = (trangThai==TS::Choi2Nguoi ||
+                                     trangThai==TS::DoiKhang) && !nguoiChoi2DaThua;
+            if (nc2CoTheDiChuyen) {
+                if (su_kien.key.code == KB::A) nguoiChoi2.diChuyen(-1);
+                if (su_kien.key.code == KB::D) nguoiChoi2.diChuyen(1);
+                if (su_kien.key.code == KB::W) nguoiChoi2.xoay();
+                if (su_kien.key.code == KB::S) nguoiChoi2.reNhanh();
+            }
+        }
+    }
+ //  CAC HAM VE MAN HINH
+    // ----------------------------------------------------------
+    void veManHinhMenu() {
+        for (int i = 0; i < 3; i++) {
+            CircleShape anhSang(120 + i * 30);
+            anhSang.setFillColor(Color(30-i*8, 30-i*8, 80-i*20, 40));
+            anhSang.setPosition(300, 180);
+            cuaSo.draw(anhSang);
+        }
+        veChuLen("XEP HINH",          240, 100, 68, Color(80,160,255));
+        Color mauBinhThuong(200, 200, 220);
+        veChuLen("[1]  1 Nguoi choi",  220, 225, 20, mauBinhThuong);
+        veChuLen("[2]  2 Nguoi choi",  220, 258, 20, mauBinhThuong);
+        veChuLen("[3]  Doi Khang",     220, 291, 20, Color(255,120,80));
+        veChuLen("[4]  Huong dan",     220, 324, 20, mauBinhThuong);
+        veChuLen("[5]  Ky luc",        220, 357, 20, mauBinhThuong);
+        veChuLen("[6]  Thoat",         220, 390, 20, mauBinhThuong);
+        if (coFileLuu1P()) veChuLen("[7]  Tiep tuc 1P da luu", 220, 423, 20, Color(100,255,150));
+        if (coFileLuu2P()) veChuLen("[8]  Tiep tuc 2P da luu", 220, 453, 20, Color(255,160,100));
+        veChuLen("KY LUC: " + to_string(diemKyLuc), 270, 490, 18, Color(255,200,0));
+    }
+ 
+    void veManHinhChonTocDo() {
+        veChuLen("CHON MUC DO",            250, 140, 36, Color(80,160,255));
+        if (choDoiKhang) veChuLen("(Che do Doi Khang)", 260, 188, 16, Color(255,120,80));
+        veChuLen("[1]  DE",                220, 240, 22, Color(100,220,100));
+        veChuLen("[2]  TRUNG BINH",        220, 285, 22, Color(220,220,50));
+        veChuLen("[3]  KHO",               220, 330, 22, Color(220,100,100));
+        veChuLen("ESC  Quay lai menu",     240, 420, 16, Color(150,150,180));
+    }
+ 
+    void veManHinhHuongDan() {
+        veChuLen("HUONG DAN",                                          280, 60,  40, Color(80,160,255));
+        veChuLen("--- 1 NGUOI CHOI ---",                              220, 130, 18, Color(100,220,100));
+        veChuLen("Arrow Left/Right : Di chuyen",                      180, 162, 15);
+        veChuLen("Arrow Up         : Xoay khoi",                      180, 182, 15);
+        veChuLen("Arrow Down       : Re nhanh",                       180, 202, 15);
+        veChuLen("--- 2 NGUOI CHOI ---",                              220, 240, 18, Color(220,100,100));
+        veChuLen("Player 2: A D W S",                                 180, 268, 15);
+        veChuLen("1 nguoi thua -> nguoi kia choi tiep!",              180, 290, 13, Color(200,200,100));
+        veChuLen("Ca 2 thua -> so diem -> xac dinh thang",            180, 308, 13, Color(200,200,100));
+        veChuLen("--- DOI KHANG (CHE DO 3) ---",                      220, 345, 18, Color(255,120,80));
+        veChuLen("Xoa 1 hang -> gui 1 hang rac",                      180, 372, 14);
+        veChuLen("Xoa 2 hang -> gui 2 hang rac",                      180, 390, 14);
+        veChuLen("Xoa 3 hang -> gui 3 hang rac",                      180, 408, 14);
+        veChuLen("Xoa 4 hang -> gui 4 hang rac",                      180, 426, 14);
+        veChuLen("Hang rac co 1 lo ngau nhien!",                      180, 444, 14, Color(200,180,80));
+        veChuLen("Nguoi thua truoc -> nguoi kia choi tiep",           180, 462, 13, Color(200,200,100));
+        veChuLen("--- DIEM SO ---",                                    240, 490, 18, Color(255,200,0));
+        veChuLen("1 hang=100 | 2 hang=300 | 3 hang=600 | TETRIS=1000",140, 515, 13);
+        veChuLen("ESC de quay lai",                                    285, 545, 16, Color(150,150,180));
+    }
+ 
+    void veManHinhKyLuc() {
+        veChuLen("KY LUC", 310, 140, 44, Color(255,200,0));
+        RectangleShape khung(Vector2f(300, 80));
+        khung.setPosition(255, 230);
+        khung.setFillColor(Color(20,20,50,220));
+        khung.setOutlineThickness(2);
+        khung.setOutlineColor(Color(255,200,0));
+        cuaSo.draw(khung);
+        veChuLen("DIEM CAO NHAT",         278, 242, 16, Color(200,200,220));
+        veChuLen(to_string(diemKyLuc),    340, 268, 30, Color(255,220,50));
+        veChuLen("ESC de quay lai",        298, 370, 16, Color(150,150,180));
+    }
  
 
