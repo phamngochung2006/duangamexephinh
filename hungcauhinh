@@ -1,41 +1,44 @@
-
-// ============================================================
 #include <SFML/Graphics.hpp>
 #include <iostream>
 #include <fstream>
 #include <ctime>
-#include <cstdlib>
 #include <string>
 #include <vector>
 #include <stdexcept>
-#include <algorithm>
 using namespace sf;
 using namespace std;
 
+// ============================================================
+//  BUILD-TIME SWITCH: chay unit test truoc khi chay game
+// ============================================================
 // #define CHAY_TEST
 
 // ============================================================
-//  CAC HANG SO TAP TRUNG
+//  CAC HANG SO TAP TRUNG - gom vao struct thay vi bien global
 // ============================================================
 struct CauHinh {
-    static constexpr int COT     = 10;
-    static constexpr int HANG    = 20;
-    static constexpr int O_SIZE  = 28;
-    static constexpr int SO_KIEU = 7;
-    static constexpr int MAU_RAC = 8;
+    static constexpr int COT       = 10;
+    static constexpr int HANG      = 20;
+    static constexpr int O_SIZE    = 28;
+    static constexpr int SO_KIEU   = 7;
+    static constexpr int MAU_RAC   = 8;   // chi so mau hang rac (xam)
 
-    static constexpr float TOC_DE    = 0.60f;
-    static constexpr float TOC_TRUNG = 0.38f;
-    static constexpr float TOC_KHO   = 0.18f;
+    static constexpr float TOC_DE     = 0.60f;
+    static constexpr float TOC_TRUNG  = 0.38f;
+    static constexpr float TOC_KHO    = 0.18f;
 
-    static constexpr const char* FILE_LUU_1P = "xephim_save.dat";
-    static constexpr const char* FILE_LUU_2P = "xephim_save_2p.dat";
-    static constexpr const char* FILE_KY_LUC = "highscore.txt";
+    static constexpr const char* FILE_LUU_1P  = "xephim_save.dat";
+    static constexpr const char* FILE_LUU_2P  = "xephim_save_2p.dat";
+    static constexpr const char* FILE_KY_LUC  = "highscore.txt";
 };
 
-static const float  BANG_TOC_DO[] = { CauHinh::TOC_DE, CauHinh::TOC_TRUNG, CauHinh::TOC_KHO };
-static const char*  NHAN_TOC_DO[] = { "DE", "TRUNG BINH", "KHO" };
+// Cau hinh toc do - truy cap qua chi so mucDo (0=De, 1=Trung, 2=Kho)
+static const float    BANG_TOC_DO[]  = { CauHinh::TOC_DE, CauHinh::TOC_TRUNG, CauHinh::TOC_KHO };
+static const char*    NHAN_TOC_DO[]  = { "DE", "TRUNG BINH", "KHO" };
 
+// ============================================================
+//  CAC KHOI XEP HINH - index theo cot/hang trong o 2x4
+// ============================================================
 static int dinhNghiaKhoi[CauHinh::SO_KIEU][4] = {
     {1,3,5,7}, // I
     {2,4,5,7}, // S
@@ -47,23 +50,47 @@ static int dinhNghiaKhoi[CauHinh::SO_KIEU][4] = {
 };
 
 static Color bangMauKhoi[CauHinh::SO_KIEU] = {
-    Color(0,220,220), Color(0,200,50),  Color(220,50,50),
-    Color(160,0,220), Color(220,140,0), Color(0,80,220),
-    Color(220,220,0)
+    Color(0,220,220),   // I - xanh nhat
+    Color(0,200,50),    // S - xanh la
+    Color(220,50,50),   // Z - do
+    Color(160,0,220),   // T - tim
+    Color(220,140,0),   // L - cam
+    Color(0,80,220),    // J - xanh duong
+    Color(220,220,0),   // O - vang
 };
 
 // ============================================================
-//  TOA DO
+//  HIEU UNG DIEM HIEN THI KHI XOA HANG
 // ============================================================
-struct ToaDo { int x, y; };
+struct HieuUngDiem {
+    float x, y, tocDoDoc, doMo, thoiGianCon;
+    string noiDung;
+
+    HieuUngDiem(float px, float py, int diem) {
+        x = px; y = py;
+        tocDoDoc    = -150.f;
+        doMo        = 255.f;
+        thoiGianCon = 0.5f;
+        noiDung     = "+" + to_string(diem);
+    }
+
+    // Tra ve false khi het thoi gian -> xoa khoi danh sach
+    bool capNhat(float dt) {
+        y           += tocDoDoc * dt;
+        doMo        -= 200.f * dt;
+        thoiGianCon -= dt;
+        return thoiGianCon > 0;
+    }
+};
 
 // ============================================================
-//  TIEN ICH DOC/GHI FILE
+//  TIEN ICH DOC/GHI FILE NHI PHAN AN TOAN
 // ============================================================
 void ghiSoNguyen(ofstream& f, int gia_tri) {
     f.write(reinterpret_cast<const char*>(&gia_tri), sizeof(gia_tri));
     if (!f) throw runtime_error("Loi ghi file");
 }
+
 int docSoNguyen(ifstream& f) {
     int gia_tri = 0;
     f.read(reinterpret_cast<char*>(&gia_tri), sizeof(gia_tri));
@@ -72,186 +99,158 @@ int docSoNguyen(ifstream& f) {
 }
 
 // ============================================================
-//  CLASS HIEUUNGDIEM
+//  CLASS BANCHOIDON - quan ly mot ban choi don le
 // ============================================================
-class HieuUngDiem {
-private:
-    float  m_x, m_y, m_tocDoDoc, m_doMo, m_thoiGianCon;
-    string m_noiDung;
+struct ToaDo { int x, y; };
 
-public:
-    HieuUngDiem(float px, float py, int diem) {
-        m_x = px; m_y = py;
-        m_tocDoDoc    = -150.f;
-        m_doMo        = 255.f;
-        m_thoiGianCon = 0.5f;
-        m_noiDung     = "+" + to_string(diem);
-    }
-
-    // --- Getters ---
-    float  getX()          const { return m_x; }
-    float  getY()          const { return m_y; }
-    float  getDoMo()       const { return m_doMo; }
-    string getNoiDung()    const { return m_noiDung; }
-
-    // --- Setters ---
-    void setNoiDung(const string& nd) { m_noiDung = nd; }
-
-    bool capNhat(float dt) {
-        m_y           += m_tocDoDoc * dt;
-        m_doMo        -= 200.f * dt;
-        m_thoiGianCon -= dt;
-        return m_thoiGianCon > 0;
-    }
-};
-
-// ============================================================
-//  CLASS BANCHOIDON
-// ============================================================
 class BanChoiDon {
-private:
-    int       m_luoi   [CauHinh::HANG][CauHinh::COT]{};
-    int       m_luoiMau[CauHinh::HANG][CauHinh::COT]{};
-    ToaDo     m_khoiHienTai[4];
-    ToaDo     m_khoiDuPhong[4];
-    int       m_kieuHienTai  = 0;
-    int       m_kieuTiepTheo = 0;
-    int       m_diem         = 0;
-    bool      m_daGameOver   = false;
-    Color     m_mauNguoiChoi;
-    bool      m_dangXoaHang  = false;
-    int       m_demHieuUng   = 0;
-    bool      m_hangDay[CauHinh::HANG]{};
-    vector<HieuUngDiem> m_danhSachHieuUng;
-    int       m_hangRacCho   = 0;
+public:
+    int  luoi[CauHinh::HANG][CauHinh::COT]{};
+    int  luoiMau[CauHinh::HANG][CauHinh::COT]{};
+    ToaDo khoiHienTai[4], khoiDuPhong[4];
+    int  kieuHienTai  = 0;
+    int  kieuTiepTheo = 0;
+    int  diem         = 0;
+    bool daGameOver   = false;
+    Color mauNguoiChoi;
 
-    // --- Noi bo ---
-    void taoBienMoi() {
-        m_kieuHienTai  = m_kieuTiepTheo;
-        m_kieuTiepTheo = rand() % CauHinh::SO_KIEU;
-        for (int i = 0; i < 4; i++) {
-            m_khoiHienTai[i].x = dinhNghiaKhoi[m_kieuHienTai][i] % 2 + CauHinh::COT / 2 - 1;
-            m_khoiHienTai[i].y = dinhNghiaKhoi[m_kieuHienTai][i] / 2;
-        }
-        if (!kiemTraHopLe()) m_daGameOver = true;
+    bool dangXoaHang  = false;
+    int  demHieuUng   = 0;
+    bool hangDay[CauHinh::HANG]{};
+
+    vector<HieuUngDiem> danhSachHieuUng;
+    int  hangRacCho   = 0;
+
+    // ----------------------------------------------------------
+    void khoiDong(Color mau) {
+        mauNguoiChoi = mau;
+        kieuTiepTheo = rand() % CauHinh::SO_KIEU;
+        diem         = 0;
+        daGameOver   = false;
+        hangRacCho   = 0;
+        danhSachHieuUng.clear();
+        for (int i = 0; i < CauHinh::HANG; i++)
+            for (int j = 0; j < CauHinh::COT; j++)
+                luoi[i][j] = luoiMau[i][j] = 0;
+        taoBienMoi();
     }
 
+    // ----------------------------------------------------------
+    //  Tao khoi moi tren dinh ban choi
+    // ----------------------------------------------------------
+    void taoBienMoi() {
+        kieuHienTai  = kieuTiepTheo;
+        kieuTiepTheo = rand() % CauHinh::SO_KIEU;
+        for (int i = 0; i < 4; i++) {
+            khoiHienTai[i].x = dinhNghiaKhoi[kieuHienTai][i] % 2 + CauHinh::COT / 2 - 1;
+            khoiHienTai[i].y = dinhNghiaKhoi[kieuHienTai][i] / 2;
+        }
+        if (!kiemTraHopLe()) daGameOver = true;
+    }
+
+    // ----------------------------------------------------------
+    //  Kiem tra vi tri khoiHienTai co hop le khong
+    // ----------------------------------------------------------
     bool kiemTraHopLe() {
         for (int i = 0; i < 4; i++) {
-            int cx = m_khoiHienTai[i].x, cy = m_khoiHienTai[i].y;
+            int cx = khoiHienTai[i].x, cy = khoiHienTai[i].y;
             if (cx < 0 || cx >= CauHinh::COT || cy >= CauHinh::HANG) return false;
-            if (cy >= 0 && m_luoi[cy][cx]) return false;
+            if (cy >= 0 && luoi[cy][cx]) return false;
         }
         return true;
     }
 
+    // ----------------------------------------------------------
+    //  Khoa khoi xuong luoi khi cham day (dung khoiDuPhong)
+    // ----------------------------------------------------------
     void khoaKhoiXuongLuoi() {
         for (int i = 0; i < 4; i++) {
-            m_luoi   [m_khoiDuPhong[i].y][m_khoiDuPhong[i].x] = 1;
-            m_luoiMau[m_khoiDuPhong[i].y][m_khoiDuPhong[i].x] = m_kieuHienTai + 1;
+            luoi[khoiDuPhong[i].y][khoiDuPhong[i].x]    = 1;
+            luoiMau[khoiDuPhong[i].y][khoiDuPhong[i].x] = kieuHienTai + 1;
         }
     }
 
+    // ----------------------------------------------------------
+    //  Dem va danh dau cac hang da day
+    // ----------------------------------------------------------
     int demHangDay() {
         int soHang = 0;
         for (int i = 0; i < CauHinh::HANG; i++) {
             int soO = 0;
-            for (int j = 0; j < CauHinh::COT; j++) if (m_luoi[i][j]) soO++;
-            m_hangDay[i] = (soO == CauHinh::COT);
-            if (m_hangDay[i]) soHang++;
+            for (int j = 0; j < CauHinh::COT; j++) if (luoi[i][j]) soO++;
+            hangDay[i] = (soO == CauHinh::COT);
+            if (hangDay[i]) soHang++;
         }
         return soHang;
     }
 
+    // ----------------------------------------------------------
+    //  Xoa cac hang da day, don cac hang con lai xuong duoi
+    // ----------------------------------------------------------
     void xoaHangDayVaDon() {
         int k = CauHinh::HANG - 1;
-        for (int i = CauHinh::HANG - 1; i >= 0; i--)
-            if (!m_hangDay[i]) {
+        for (int i = CauHinh::HANG - 1; i >= 0; i--) {
+            if (!hangDay[i]) {
                 for (int j = 0; j < CauHinh::COT; j++) {
-                    m_luoi   [k][j] = m_luoi   [i][j];
-                    m_luoiMau[k][j] = m_luoiMau[i][j];
+                    luoi[k][j]    = luoi[i][j];
+                    luoiMau[k][j] = luoiMau[i][j];
                 }
                 k--;
             }
+        }
     }
 
+    // ----------------------------------------------------------
+    //  Tinh diem theo so hang xoa duoc
+    // ----------------------------------------------------------
     int tinhDiemTheoSoHang(int soHang) {
         switch (soHang) {
-        case 1: return 100; case 2: return 300;
-        case 3: return 600; case 4: return 1000;
-        default: return 0;
+            case 1:  return 100;
+            case 2:  return 300;
+            case 3:  return 600;
+            case 4:  return 1000;
+            default: return 0;
         }
     }
 
-    void tinhViTriBong(ToaDo bong[4]) {
-        for (int i = 0; i < 4; i++) bong[i] = m_khoiHienTai[i];
-        ToaDo tam[4];
-        while (true) {
-            for (int i = 0; i < 4; i++) { tam[i] = bong[i]; bong[i].y++; }
-            bool hopLe = true;
-            for (int i = 0; i < 4; i++) {
-                if (bong[i].x < 0 || bong[i].x >= CauHinh::COT || bong[i].y >= CauHinh::HANG)
-                { hopLe = false; break; }
-                if (bong[i].y >= 0 && m_luoi[bong[i].y][bong[i].x])
-                { hopLe = false; break; }
-            }
-            if (!hopLe) { for (int i = 0; i < 4; i++) bong[i] = tam[i]; break; }
-        }
-    }
-
-public:
-    // ---- Khoi tao ----
-    void khoiDong(Color mau) {
-        m_mauNguoiChoi = mau;
-        m_kieuTiepTheo = rand() % CauHinh::SO_KIEU;
-        m_diem = 0; m_daGameOver = false; m_hangRacCho = 0;
-        m_danhSachHieuUng.clear();
-        for (int i = 0; i < CauHinh::HANG; i++)
-            for (int j = 0; j < CauHinh::COT; j++)
-                m_luoi[i][j] = m_luoiMau[i][j] = 0;
-        taoBienMoi();
-    }
-
-    // ---- Getters ----
-    int   getDiem()           const { return m_diem; }
-    bool  getDaGameOver()     const { return m_daGameOver; }
-    bool  getDangXoaHang()    const { return m_dangXoaHang; }
-    int   getHangRacCho()     const { return m_hangRacCho; }
-    int   getKieuHienTai()    const { return m_kieuHienTai; }
-    int   getKieuTiepTheo()   const { return m_kieuTiepTheo; }
-    Color getMauNguoiChoi()   const { return m_mauNguoiChoi; }
-    ToaDo getKhoiHienTai(int i) const { return m_khoiHienTai[i]; }
-    int   getLuoi   (int r, int c) const { return m_luoi   [r][c]; }
-    int   getLuoiMau(int r, int c) const { return m_luoiMau[r][c]; }
-    bool  getHangDay(int i)   const { return m_hangDay[i]; }
-    int   getDemHieuUng()     const { return m_demHieuUng; }
-    const vector<HieuUngDiem>& getDanhSachHieuUng() const { return m_danhSachHieuUng; }
-          vector<HieuUngDiem>& getDanhSachHieuUng()       { return m_danhSachHieuUng; }
-
-    // ---- Setters ----
-    void setHangRacCho(int v) { m_hangRacCho = v; }
-    void setDiem(int v)       { m_diem = v; }
-
-    // ---- Hanh dong ----
+    // ----------------------------------------------------------
+    //  Cap nhat 1 buoc roi (goi moi tick game)
+    //  Tra ve so hang da xoa - de xu ly gui rac o che do doi khang
+    // ----------------------------------------------------------
     int buocRoi(float viTriNgang) {
-        if (m_dangXoaHang) {
-            if (--m_demHieuUng <= 0) { xoaHangDayVaDon(); m_dangXoaHang = false; }
+        // Dang trong animation xoa hang -> dem lui, het thi don luoi
+        if (dangXoaHang) {
+            if (--demHieuUng <= 0) {
+                xoaHangDayVaDon();
+                dangXoaHang = false;
+            }
             return 0;
         }
-        for (int i = 0; i < 4; i++) { m_khoiDuPhong[i] = m_khoiHienTai[i]; m_khoiHienTai[i].y++; }
+
+        // Thu di chuyen khoi xuong 1 o
+        for (int i = 0; i < 4; i++) {
+            khoiDuPhong[i]   = khoiHienTai[i];
+            khoiHienTai[i].y++;
+        }
+
+        // Neu khong hop le -> khoa khoi, kiem tra xoa hang, tao bien moi
         if (!kiemTraHopLe()) {
-            for (int i = 0; i < 4; i++) m_khoiHienTai[i] = m_khoiDuPhong[i];
+            for (int i = 0; i < 4; i++) khoiHienTai[i] = khoiDuPhong[i];
             khoaKhoiXuongLuoi();
+
             int soHangXoa = demHangDay();
             if (soHangXoa > 0) {
-                m_dangXoaHang = true; m_demHieuUng = 2;
-                int d = tinhDiemTheoSoHang(soHangXoa); m_diem += d;
+                dangXoaHang = true;
+                demHieuUng  = 2;
+                int diemKiemDuoc = tinhDiemTheoSoHang(soHangXoa);
+                diem += diemKiemDuoc;
+
                 float ex = viTriNgang + (CauHinh::COT * CauHinh::O_SIZE) / 2.f;
                 float ey = CauHinh::HANG * CauHinh::O_SIZE / 2.f;
-                m_danhSachHieuUng.push_back(HieuUngDiem(ex, ey, d));
+                danhSachHieuUng.push_back(HieuUngDiem(ex, ey, diemKiemDuoc));
                 if (soHangXoa == 4) {
-                    m_danhSachHieuUng.push_back(HieuUngDiem(ex - 20, ey + 30, 0));
-                    m_danhSachHieuUng.back().setNoiDung("TETRIS!");
+                    danhSachHieuUng.push_back(HieuUngDiem(ex - 20, ey + 30, 0));
+                    danhSachHieuUng.back().noiDung = "TETRIS!";
                 }
             }
             taoBienMoi();
@@ -260,565 +259,239 @@ public:
         return 0;
     }
 
+    // ----------------------------------------------------------
     void diChuyen(int dx) {
-        for (int i = 0; i < 4; i++) { m_khoiDuPhong[i] = m_khoiHienTai[i]; m_khoiHienTai[i].x += dx; }
-        if (!kiemTraHopLe()) for (int i = 0; i < 4; i++) m_khoiHienTai[i] = m_khoiDuPhong[i];
+        for (int i = 0; i < 4; i++) { khoiDuPhong[i] = khoiHienTai[i]; khoiHienTai[i].x += dx; }
+        if (!kiemTraHopLe()) for (int i = 0; i < 4; i++) khoiHienTai[i] = khoiDuPhong[i];
     }
 
     void xoay() {
-        ToaDo tamXoay = m_khoiHienTai[1];
+        ToaDo tamXoay = khoiHienTai[1];
         for (int i = 0; i < 4; i++) {
-            int dx = m_khoiHienTai[i].y - tamXoay.y;
-            int dy = m_khoiHienTai[i].x - tamXoay.x;
-            m_khoiDuPhong[i] = m_khoiHienTai[i];
-            m_khoiHienTai[i].x = tamXoay.x - dx;
-            m_khoiHienTai[i].y = tamXoay.y + dy;
+            int dx = khoiHienTai[i].y - tamXoay.y;
+            int dy = khoiHienTai[i].x - tamXoay.x;
+            khoiDuPhong[i]   = khoiHienTai[i];
+            khoiHienTai[i].x = tamXoay.x - dx;
+            khoiHienTai[i].y = tamXoay.y + dy;
         }
-        if (!kiemTraHopLe()) for (int i = 0; i < 4; i++) m_khoiHienTai[i] = m_khoiDuPhong[i];
+        if (!kiemTraHopLe()) for (int i = 0; i < 4; i++) khoiHienTai[i] = khoiDuPhong[i];
     }
 
     void reNhanh() {
         while (true) {
-            for (int i = 0; i < 4; i++) { m_khoiDuPhong[i] = m_khoiHienTai[i]; m_khoiHienTai[i].y++; }
-            if (!kiemTraHopLe()) { for (int i = 0; i < 4; i++) m_khoiHienTai[i] = m_khoiDuPhong[i]; break; }
+            for (int i = 0; i < 4; i++) { khoiDuPhong[i] = khoiHienTai[i]; khoiHienTai[i].y++; }
+            if (!kiemTraHopLe()) { for (int i = 0; i < 4; i++) khoiHienTai[i] = khoiDuPhong[i]; break; }
         }
     }
 
+    // ----------------------------------------------------------
+    //  Tinh vi tri bong (ghost piece) de hien thi
+    // ----------------------------------------------------------
+    void tinhViTriBong(ToaDo bong[4]) {
+        for (int i = 0; i < 4; i++) bong[i] = khoiHienTai[i];
+        ToaDo tam[4];
+        while (true) {
+            for (int i = 0; i < 4; i++) { tam[i] = bong[i]; bong[i].y++; }
+            bool hopLe = true;
+            for (int i = 0; i < 4; i++) {
+                if (bong[i].x < 0 || bong[i].x >= CauHinh::COT || bong[i].y >= CauHinh::HANG)
+                    { hopLe = false; break; }
+                if (bong[i].y >= 0 && luoi[bong[i].y][bong[i].x])
+                    { hopLe = false; break; }
+            }
+            if (!hopLe) { for (int i = 0; i < 4; i++) bong[i] = tam[i]; break; }
+        }
+    }
+
+    // ----------------------------------------------------------
+    //  Nhan hang rac tu doi thu (che do doi khang)
+    // ----------------------------------------------------------
     void nhanHangRac(int soHang) {
         if (soHang <= 0) return;
         for (int i = 0; i < CauHinh::HANG - soHang; i++)
             for (int j = 0; j < CauHinh::COT; j++) {
-                m_luoi   [i][j] = m_luoi   [i + soHang][j];
-                m_luoiMau[i][j] = m_luoiMau[i + soHang][j];
+                luoi[i][j]    = luoi[i + soHang][j];
+                luoiMau[i][j] = luoiMau[i + soHang][j];
             }
         int viTriLo = rand() % CauHinh::COT;
         for (int i = CauHinh::HANG - soHang; i < CauHinh::HANG; i++)
             for (int j = 0; j < CauHinh::COT; j++) {
-                m_luoi   [i][j] = (j == viTriLo) ? 0 : 1;
-                m_luoiMau[i][j] = (j == viTriLo) ? 0 : CauHinh::MAU_RAC;
+                luoi[i][j]    = (j == viTriLo) ? 0 : 1;
+                luoiMau[i][j] = (j == viTriLo) ? 0 : CauHinh::MAU_RAC;
             }
         for (int k = 0; k < soHang; k++) {
             bool biChong = false;
             for (int i = 0; i < 4; i++)
-                if (m_khoiHienTai[i].y >= 0 && m_khoiHienTai[i].y < CauHinh::HANG
-                    && m_luoi[m_khoiHienTai[i].y][m_khoiHienTai[i].x])
-                { biChong = true; break; }
-            if (biChong) for (int i = 0; i < 4; i++) m_khoiHienTai[i].y--;
+                if (khoiHienTai[i].y >= 0 && khoiHienTai[i].y < CauHinh::HANG
+                    && luoi[khoiHienTai[i].y][khoiHienTai[i].x])
+                    { biChong = true; break; }
+            if (biChong) for (int i = 0; i < 4; i++) khoiHienTai[i].y--;
         }
     }
 
     void capNhatHieuUng(float dt) {
-        for (int i = (int)m_danhSachHieuUng.size() - 1; i >= 0; i--)
-            if (!m_danhSachHieuUng[i].capNhat(dt))
-                m_danhSachHieuUng.erase(m_danhSachHieuUng.begin() + i);
+        for (int i = (int)danhSachHieuUng.size() - 1; i >= 0; i--)
+            if (!danhSachHieuUng[i].capNhat(dt))
+                danhSachHieuUng.erase(danhSachHieuUng.begin() + i);
     }
 
-    // ---- Luu / Nap ----
+    // ----------------------------------------------------------
+    //  LUU / NAP TRANG THAI
+    // ----------------------------------------------------------
     void luuTrangThai(ofstream& f) {
         for (int i = 0; i < CauHinh::HANG; i++)
             for (int j = 0; j < CauHinh::COT; j++) {
-                ghiSoNguyen(f, m_luoi   [i][j]);
-                ghiSoNguyen(f, m_luoiMau[i][j]);
+                ghiSoNguyen(f, luoi[i][j]);
+                ghiSoNguyen(f, luoiMau[i][j]);
             }
         for (int i = 0; i < 4; i++) {
-            ghiSoNguyen(f, m_khoiHienTai[i].x);
-            ghiSoNguyen(f, m_khoiHienTai[i].y);
+            ghiSoNguyen(f, khoiHienTai[i].x);
+            ghiSoNguyen(f, khoiHienTai[i].y);
         }
-        ghiSoNguyen(f, m_kieuHienTai); ghiSoNguyen(f, m_kieuTiepTheo); ghiSoNguyen(f, m_diem);
+        ghiSoNguyen(f, kieuHienTai);
+        ghiSoNguyen(f, kieuTiepTheo);
+        ghiSoNguyen(f, diem);
     }
 
     void napTrangThai(ifstream& f) {
         for (int i = 0; i < CauHinh::HANG; i++)
             for (int j = 0; j < CauHinh::COT; j++) {
-                m_luoi   [i][j] = docSoNguyen(f);
-                m_luoiMau[i][j] = docSoNguyen(f);
+                luoi[i][j]    = docSoNguyen(f);
+                luoiMau[i][j] = docSoNguyen(f);
             }
         for (int i = 0; i < 4; i++) {
-            m_khoiHienTai[i].x = docSoNguyen(f);
-            m_khoiHienTai[i].y = docSoNguyen(f);
+            khoiHienTai[i].x = docSoNguyen(f);
+            khoiHienTai[i].y = docSoNguyen(f);
         }
-        m_kieuHienTai = docSoNguyen(f); m_kieuTiepTheo = docSoNguyen(f); m_diem = docSoNguyen(f);
-        m_daGameOver = false; m_dangXoaHang = false; m_hangRacCho = 0;
-        m_danhSachHieuUng.clear();
+        kieuHienTai  = docSoNguyen(f);
+        kieuTiepTheo = docSoNguyen(f);
+        diem         = docSoNguyen(f);
+        daGameOver   = false;
+        dangXoaHang  = false;
+        hangRacCho   = 0;
+        danhSachHieuUng.clear();
     }
 
-    // ---- Ve ----
+    // ----------------------------------------------------------
+    //  VE BAN CHOI
+    // ----------------------------------------------------------
     void veBanChoi(RenderWindow& cua_so, int viTriNgang, Font& phong_chu) {
         RectangleShape nen(Vector2f(CauHinh::COT * CauHinh::O_SIZE, CauHinh::HANG * CauHinh::O_SIZE));
-        nen.setPosition(viTriNgang, 0); nen.setFillColor(Color(15, 15, 30)); cua_so.draw(nen);
+        nen.setPosition(viTriNgang, 0);
+        nen.setFillColor(Color(15, 15, 30));
+        cua_so.draw(nen);
 
         RectangleShape duongDoc(Vector2f(1, CauHinh::HANG * CauHinh::O_SIZE));
         duongDoc.setFillColor(Color(40, 40, 60));
         for (int j = 1; j < CauHinh::COT; j++) {
-            duongDoc.setPosition(viTriNgang + j * CauHinh::O_SIZE, 0); cua_so.draw(duongDoc);
+            duongDoc.setPosition(viTriNgang + j * CauHinh::O_SIZE, 0);
+            cua_so.draw(duongDoc);
         }
         RectangleShape duongNgang(Vector2f(CauHinh::COT * CauHinh::O_SIZE, 1));
         duongNgang.setFillColor(Color(40, 40, 60));
         for (int i = 1; i < CauHinh::HANG; i++) {
-            duongNgang.setPosition(viTriNgang, i * CauHinh::O_SIZE); cua_so.draw(duongNgang);
+            duongNgang.setPosition(viTriNgang, i * CauHinh::O_SIZE);
+            cua_so.draw(duongNgang);
         }
 
         RectangleShape o(Vector2f(CauHinh::O_SIZE - 2.f, CauHinh::O_SIZE - 2.f));
         for (int i = 0; i < CauHinh::HANG; i++)
             for (int j = 0; j < CauHinh::COT; j++) {
-                if (!m_luoi[i][j]) continue;
-                int ci = m_luoiMau[i][j] - 1;
-                Color mauO = (ci == CauHinh::MAU_RAC - 1) ? Color(100,100,100)
-                    : (ci >= 0 && ci < CauHinh::SO_KIEU) ? bangMauKhoi[ci] : m_mauNguoiChoi;
-                if (m_dangXoaHang && m_hangDay[i])
-                    mauO = (m_demHieuUng % 3 == 0) ? Color::White : Color(mauO.r/2, mauO.g/2, mauO.b/2);
+                if (!luoi[i][j]) continue;
+                int ci = luoiMau[i][j] - 1;
+                Color mauO;
+                if (ci == CauHinh::MAU_RAC - 1) mauO = Color(100, 100, 100);
+                else mauO = (ci >= 0 && ci < CauHinh::SO_KIEU) ? bangMauKhoi[ci] : mauNguoiChoi;
+                if (dangXoaHang && hangDay[i])
+                    mauO = (demHieuUng % 3 == 0) ? Color::White
+                                                 : Color(mauO.r/2, mauO.g/2, mauO.b/2);
                 o.setFillColor(mauO);
                 o.setPosition(viTriNgang + j * CauHinh::O_SIZE + 1, i * CauHinh::O_SIZE + 1);
                 cua_so.draw(o);
                 RectangleShape sang(Vector2f(CauHinh::O_SIZE - 2.f, 3.f));
-                sang.setFillColor(Color(255,255,255,60));
+                sang.setFillColor(Color(255, 255, 255, 60));
                 sang.setPosition(viTriNgang + j * CauHinh::O_SIZE + 1, i * CauHinh::O_SIZE + 1);
                 cua_so.draw(sang);
             }
 
         ToaDo bong[4]; tinhViTriBong(bong);
-        Color mauBong = bangMauKhoi[m_kieuHienTai]; mauBong.a = 60;
+        Color mauBong = bangMauKhoi[kieuHienTai]; mauBong.a = 60;
         o.setFillColor(mauBong);
-        for (int i = 0; i < 4; i++) if (bong[i].y >= 0) {
-            o.setPosition(viTriNgang + bong[i].x * CauHinh::O_SIZE + 1, bong[i].y * CauHinh::O_SIZE + 1);
-            cua_so.draw(o);
-        }
-        Color mauKhoi = bangMauKhoi[m_kieuHienTai]; mauKhoi.a = 255;
+        for (int i = 0; i < 4; i++)
+            if (bong[i].y >= 0) {
+                o.setPosition(viTriNgang + bong[i].x * CauHinh::O_SIZE + 1,
+                               bong[i].y * CauHinh::O_SIZE + 1);
+                cua_so.draw(o);
+            }
+
+        Color mauKhoi = bangMauKhoi[kieuHienTai]; mauKhoi.a = 255;
         o.setFillColor(mauKhoi);
-        for (int i = 0; i < 4; i++) if (m_khoiHienTai[i].y >= 0) {
-            o.setPosition(viTriNgang + m_khoiHienTai[i].x * CauHinh::O_SIZE + 1,
-                          m_khoiHienTai[i].y * CauHinh::O_SIZE + 1);
-            cua_so.draw(o);
-            RectangleShape sang(Vector2f(CauHinh::O_SIZE - 2.f, 3.f));
-            sang.setFillColor(Color(255,255,255,80));
-            sang.setPosition(viTriNgang + m_khoiHienTai[i].x * CauHinh::O_SIZE + 1,
-                             m_khoiHienTai[i].y * CauHinh::O_SIZE + 1);
-            cua_so.draw(sang);
-        }
+        for (int i = 0; i < 4; i++)
+            if (khoiHienTai[i].y >= 0) {
+                o.setPosition(viTriNgang + khoiHienTai[i].x * CauHinh::O_SIZE + 1,
+                               khoiHienTai[i].y * CauHinh::O_SIZE + 1);
+                cua_so.draw(o);
+                RectangleShape sang(Vector2f(CauHinh::O_SIZE - 2.f, 3.f));
+                sang.setFillColor(Color(255, 255, 255, 80));
+                sang.setPosition(viTriNgang + khoiHienTai[i].x * CauHinh::O_SIZE + 1,
+                                  khoiHienTai[i].y * CauHinh::O_SIZE + 1);
+                cua_so.draw(sang);
+            }
+
         RectangleShape khung(Vector2f(CauHinh::COT * CauHinh::O_SIZE, CauHinh::HANG * CauHinh::O_SIZE));
-        khung.setPosition(viTriNgang, 0); khung.setFillColor(Color::Transparent);
-        khung.setOutlineThickness(2); khung.setOutlineColor(Color(100,100,160));
+        khung.setPosition(viTriNgang, 0);
+        khung.setFillColor(Color::Transparent);
+        khung.setOutlineThickness(2);
+        khung.setOutlineColor(Color(100, 100, 160));
         cua_so.draw(khung);
     }
 
+    // ----------------------------------------------------------
     void vePanel(RenderWindow& cua_so, int panelX, int panelY, Font& phong_chu, const string& nhan) {
         RectangleShape nen(Vector2f(130, 310));
-        nen.setPosition(panelX, panelY); nen.setFillColor(Color(20,20,40,200));
-        nen.setOutlineThickness(1); nen.setOutlineColor(Color(80,80,120)); cua_so.draw(nen);
+        nen.setPosition(panelX, panelY);
+        nen.setFillColor(Color(20, 20, 40, 200));
+        nen.setOutlineThickness(1);
+        nen.setOutlineColor(Color(80, 80, 120));
+        cua_so.draw(nen);
+
         auto veChu = [&](const string& s, int x, int y, int cz, Color c) {
             Text t(s, phong_chu, cz); t.setPosition((float)x, (float)y); t.setFillColor(c); cua_so.draw(t);
         };
-        veChu(nhan,              panelX+10, panelY+8,  16, m_mauNguoiChoi);
-        veChu("DIEM",            panelX+10, panelY+35, 12, Color(160,160,200));
-        veChu(to_string(m_diem), panelX+10, panelY+52, 22, Color::White);
-        veChu("TIEP THEO",       panelX+10, panelY+90, 12, Color(160,160,200));
+        veChu(nhan,                 panelX+10, panelY+8,  16, mauNguoiChoi);
+        veChu("DIEM",               panelX+10, panelY+35, 12, Color(160,160,200));
+        veChu(to_string(diem),      panelX+10, panelY+52, 22, Color::White);
+        veChu("TIEP THEO",          panelX+10, panelY+90, 12, Color(160,160,200));
+
         int coChuKhoi = 22;
         ToaDo xemTruoc[4];
         for (int i = 0; i < 4; i++) {
-            xemTruoc[i].x = dinhNghiaKhoi[m_kieuTiepTheo][i] % 2;
-            xemTruoc[i].y = dinhNghiaKhoi[m_kieuTiepTheo][i] / 2;
+            xemTruoc[i].x = dinhNghiaKhoi[kieuTiepTheo][i] % 2;
+            xemTruoc[i].y = dinhNghiaKhoi[kieuTiepTheo][i] / 2;
         }
-        RectangleShape oXem(Vector2f(coChuKhoi-2.f, coChuKhoi-2.f));
-        oXem.setFillColor(bangMauKhoi[m_kieuTiepTheo]);
-        int gocX = panelX+30, gocY = panelY+115;
+        RectangleShape oXem(Vector2f(coChuKhoi - 2.f, coChuKhoi - 2.f));
+        oXem.setFillColor(bangMauKhoi[kieuTiepTheo]);
+        int gocX = panelX + 30, gocY = panelY + 115;
         for (int i = 0; i < 4; i++) {
             oXem.setPosition(gocX + xemTruoc[i].x * coChuKhoi, gocY + xemTruoc[i].y * coChuKhoi);
             cua_so.draw(oXem);
         }
-        if (m_hangRacCho > 0)
-            veChu("RAC: " + to_string(m_hangRacCho), panelX+10, panelY+190, 13, Color(255,80,80));
+
+        if (hangRacCho > 0)
+            veChu("RAC: " + to_string(hangRacCho), panelX+10, panelY+190, 13, Color(255,80,80));
     }
 
+    // ----------------------------------------------------------
     void veHieuUngDiem(RenderWindow& cua_so, Font& phong_chu) {
-        for (auto& hu : m_danhSachHieuUng) {
-            bool laTetris = (hu.getNoiDung() == "TETRIS!");
-            Text t(hu.getNoiDung(), phong_chu, laTetris ? 26 : 22);
-            Uint8 doMo = (Uint8)max(0.f, hu.getDoMo());
+        for (auto& hu : danhSachHieuUng) {
+            bool laTetris = (hu.noiDung == "TETRIS!");
+            Text t(hu.noiDung, phong_chu, laTetris ? 26 : 22);
+            Uint8 doMo = (Uint8)max(0.f, hu.doMo);
             t.setFillColor(laTetris ? Color(255,220,0,doMo) : Color(100,255,100,doMo));
-            t.setOutlineColor(Color(0,0,0,doMo)); t.setOutlineThickness(2);
-            t.setPosition(hu.getX() - t.getLocalBounds().width / 2.f, hu.getY());
+            t.setOutlineColor(Color(0,0,0,doMo));
+            t.setOutlineThickness(2);
+            t.setPosition(hu.x - t.getLocalBounds().width / 2.f, hu.y);
             cua_so.draw(t);
-        }
-    }
-};
-
-// ============================================================
-//  CLASS TROCHOI
-// ============================================================
-class TroChoi {
-private:
-    RenderWindow m_cuaSo;
-    Font         m_phongChu;
-
-    enum class TrangThaiGame {
-        Menu, ChonTocDo,
-        Choi1Nguoi, Choi2Nguoi, DoiKhang,
-        HuongDan, KyLuc
-    };
-    TrangThaiGame m_trangThai = TrangThaiGame::Menu;
-
-    BanChoiDon m_nguoiChoi1, m_nguoiChoi2;
-    Clock      m_dongHo;
-    float      m_thoiGianTich = 0, m_dt = 0;
-    int        m_diemKyLuc    = 0;
-    int        m_mucTocDo     = 1;
-    bool       m_cho2Nguoi    = false;
-    bool       m_choDoiKhang  = false;
-    bool       m_nguoiChoi1DaThua = false;
-    bool       m_nguoiChoi2DaThua = false;
-
-    static constexpr int BAN_1P_X     = 200;
-    static constexpr int PANEL_1P_X   = 210 + CauHinh::COT * CauHinh::O_SIZE + 10;
-    static constexpr int BAN_2P_1_X   = 20;
-    static constexpr int PANEL_2P_1_X = 20  + CauHinh::COT * CauHinh::O_SIZE + 5;
-    static constexpr int BAN_2P_2_X   = 450;
-    static constexpr int PANEL_2P_2_X = 450 + CauHinh::COT * CauHinh::O_SIZE + 5;
-    static constexpr int BAN_DK_1_X   = 10;
-    static constexpr int PANEL_DK_1_X = 10  + CauHinh::COT * CauHinh::O_SIZE + 5;
-    static constexpr int BAN_DK_2_X   = 440;
-    static constexpr int PANEL_DK_2_X = 440 + CauHinh::COT * CauHinh::O_SIZE + 5;
-
-    // ---- Luu/Nap ----
-    void docKyLuc() {
-        try { ifstream f(CauHinh::FILE_KY_LUC); if (f) f >> m_diemKyLuc; }
-        catch (...) { m_diemKyLuc = 0; }
-    }
-    void luuKyLuc(int diem) {
-        try {
-            if (diem > m_diemKyLuc) {
-                m_diemKyLuc = diem;
-                ofstream f(CauHinh::FILE_KY_LUC); if (f) f << m_diemKyLuc;
-            }
-        } catch (...) {}
-    }
-    void luuGame1Nguoi() {
-        try {
-            ofstream f(CauHinh::FILE_LUU_1P, ios::binary); if (!f) return;
-            m_nguoiChoi1.luuTrangThai(f); ghiSoNguyen(f, m_mucTocDo);
-        } catch (...) {}
-    }
-    bool napGame1Nguoi() {
-        try {
-            ifstream f(CauHinh::FILE_LUU_1P, ios::binary); if (!f) return false;
-            m_nguoiChoi1.khoiDong(Color(50,220,80)); m_nguoiChoi1.napTrangThai(f);
-            m_mucTocDo = docSoNguyen(f);
-            if (m_mucTocDo < 0 || m_mucTocDo > 2) m_mucTocDo = 1;
-            return true;
-        } catch (...) { return false; }
-    }
-    void luuGame2Nguoi() {
-        try {
-            ofstream f(CauHinh::FILE_LUU_2P, ios::binary); if (!f) return;
-            m_nguoiChoi1.luuTrangThai(f); m_nguoiChoi2.luuTrangThai(f); ghiSoNguyen(f, m_mucTocDo);
-        } catch (...) {}
-    }
-    bool napGame2Nguoi() {
-        try {
-            ifstream f(CauHinh::FILE_LUU_2P, ios::binary); if (!f) return false;
-            m_nguoiChoi1.khoiDong(Color(50,220,80)); m_nguoiChoi2.khoiDong(Color(220,80,80));
-            m_nguoiChoi1.napTrangThai(f); m_nguoiChoi2.napTrangThai(f);
-            m_mucTocDo = docSoNguyen(f);
-            if (m_mucTocDo < 0 || m_mucTocDo > 2) m_mucTocDo = 1;
-            return true;
-        } catch (...) { return false; }
-    }
-    void xoaFileLuu(const char* p) { remove(p); }
-    bool coFileLuu1P() { ifstream f(CauHinh::FILE_LUU_1P, ios::binary); return f.good(); }
-    bool coFileLuu2P() { ifstream f(CauHinh::FILE_LUU_2P, ios::binary); return f.good(); }
-
-    // ---- Tien ich ve ----
-    void veChuLen(const string& nd, int x, int y, int cz = 20, Color mau = Color::White) {
-        Text t(nd, m_phongChu, cz); t.setPosition((float)x, (float)y); t.setFillColor(mau); m_cuaSo.draw(t);
-    }
-    void veOverlayDaThua(int vx, const string& ch2) {
-        RectangleShape man(Vector2f(CauHinh::COT * CauHinh::O_SIZE, CauHinh::HANG * CauHinh::O_SIZE));
-        man.setPosition(vx, 0); man.setFillColor(Color(0,0,0,180)); m_cuaSo.draw(man);
-        Text cT("THUA", m_phongChu, 32); cT.setFillColor(Color(220,60,60));
-        cT.setPosition(vx + CauHinh::COT*CauHinh::O_SIZE/2.f - cT.getLocalBounds().width/2.f,
-                       CauHinh::HANG*CauHinh::O_SIZE/2.f - 20); m_cuaSo.draw(cT);
-        Text cC(ch2, m_phongChu, 14); cC.setFillColor(Color(200,200,200));
-        cC.setPosition(vx + CauHinh::COT*CauHinh::O_SIZE/2.f - cC.getLocalBounds().width/2.f,
-                       CauHinh::HANG*CauHinh::O_SIZE/2.f + 22); m_cuaSo.draw(cC);
-    }
-    void veMuiTenDoiKhangGiua() {
-        int cx = 415, cy = CauHinh::HANG * CauHinh::O_SIZE / 2;
-        RectangleShape thanh(Vector2f(30,4)); thanh.setFillColor(Color(200,200,60));
-        thanh.setPosition(cx-15, cy-2); m_cuaSo.draw(thanh);
-        ConvexShape dT; dT.setPointCount(3);
-        dT.setPoint(0,{0,0}); dT.setPoint(1,{10,-7}); dT.setPoint(2,{10,7});
-        dT.setFillColor(Color(200,200,60)); dT.setPosition(cx-15, cy); m_cuaSo.draw(dT);
-        ConvexShape dP; dP.setPointCount(3);
-        dP.setPoint(0,{10,0}); dP.setPoint(1,{0,-7}); dP.setPoint(2,{0,7});
-        dP.setFillColor(Color(200,200,60)); dP.setPosition(cx+5, cy); m_cuaSo.draw(dP);
-    }
-
-    // ---- Game flow ----
-    void batDauGame() {
-        m_nguoiChoi1DaThua = m_nguoiChoi2DaThua = false;
-        if (m_choDoiKhang) {
-            m_nguoiChoi1.khoiDong(Color(50,220,80)); m_nguoiChoi2.khoiDong(Color(220,80,80));
-            m_trangThai = TrangThaiGame::DoiKhang;
-        } else if (!m_cho2Nguoi) {
-            m_nguoiChoi1.khoiDong(Color(50,220,80));
-            m_trangThai = TrangThaiGame::Choi1Nguoi;
-        } else {
-            m_nguoiChoi1.khoiDong(Color(50,220,80)); m_nguoiChoi2.khoiDong(Color(220,80,80));
-            m_trangThai = TrangThaiGame::Choi2Nguoi;
-        }
-        m_thoiGianTich = 0;
-    }
-
-    void xuLyPhimNhan(Event& sk) {
-        using KB = Keyboard; using TS = TrangThaiGame;
-        if (m_trangThai == TS::Menu) {
-            if (sk.key.code == KB::Num1) { m_cho2Nguoi=false; m_choDoiKhang=false; m_trangThai=TS::ChonTocDo; }
-            if (sk.key.code == KB::Num2) { m_cho2Nguoi=true;  m_choDoiKhang=false; m_trangThai=TS::ChonTocDo; }
-            if (sk.key.code == KB::Num3) { m_cho2Nguoi=false; m_choDoiKhang=true;  m_trangThai=TS::ChonTocDo; }
-            if (sk.key.code == KB::Num4) m_trangThai=TS::HuongDan;
-            if (sk.key.code == KB::Num5) m_trangThai=TS::KyLuc;
-            if (sk.key.code == KB::Num6) m_cuaSo.close();
-            if (sk.key.code == KB::Num7 && coFileLuu1P())
-                if (napGame1Nguoi()) { m_trangThai=TS::Choi1Nguoi; m_thoiGianTich=0; }
-            if (sk.key.code == KB::Num8 && coFileLuu2P())
-                if (napGame2Nguoi()) { m_trangThai=TS::Choi2Nguoi; m_thoiGianTich=0; }
-        } else if (m_trangThai == TS::ChonTocDo) {
-            if (sk.key.code == KB::Num1) { m_mucTocDo=0; batDauGame(); }
-            if (sk.key.code == KB::Num2) { m_mucTocDo=1; batDauGame(); }
-            if (sk.key.code == KB::Num3) { m_mucTocDo=2; batDauGame(); }
-            if (sk.key.code == KB::Escape) m_trangThai=TS::Menu;
-        } else if (m_trangThai == TS::HuongDan || m_trangThai == TS::KyLuc) {
-            if (sk.key.code == KB::Escape) m_trangThai=TS::Menu;
-        } else {
-            if (sk.key.code == KB::Escape) {
-                if (m_trangThai==TS::Choi1Nguoi) luuGame1Nguoi();
-                if (m_trangThai==TS::Choi2Nguoi) luuGame2Nguoi();
-                m_trangThai=TS::Menu;
-            }
-            bool nc1 = (m_trangThai==TS::Choi1Nguoi || m_trangThai==TS::Choi2Nguoi ||
-                        m_trangThai==TS::DoiKhang) && !m_nguoiChoi1DaThua;
-            if (nc1) {
-                if (sk.key.code==KB::Left)  m_nguoiChoi1.diChuyen(-1);
-                if (sk.key.code==KB::Right) m_nguoiChoi1.diChuyen(1);
-                if (sk.key.code==KB::Up)    m_nguoiChoi1.xoay();
-                if (sk.key.code==KB::Down)  m_nguoiChoi1.reNhanh();
-            }
-            bool nc2 = (m_trangThai==TS::Choi2Nguoi || m_trangThai==TS::DoiKhang) && !m_nguoiChoi2DaThua;
-            if (nc2) {
-                if (sk.key.code==KB::A) m_nguoiChoi2.diChuyen(-1);
-                if (sk.key.code==KB::D) m_nguoiChoi2.diChuyen(1);
-                if (sk.key.code==KB::W) m_nguoiChoi2.xoay();
-                if (sk.key.code==KB::S) m_nguoiChoi2.reNhanh();
-            }
-        }
-    }
-
-    // ---- Man hinh ----
-    void veManHinhMenu() {
-        for (int i = 0; i < 3; i++) {
-            CircleShape a(120+i*30); a.setFillColor(Color(30-i*8,30-i*8,80-i*20,40));
-            a.setPosition(300,180); m_cuaSo.draw(a);
-        }
-        veChuLen("XEP HINH",240,100,68,Color(80,160,255));
-        Color m(200,200,220);
-        veChuLen("[1]  1 Nguoi choi",220,225,20,m); veChuLen("[2]  2 Nguoi choi",220,258,20,m);
-        veChuLen("[3]  Doi Khang",220,291,20,Color(255,120,80));
-        veChuLen("[4]  Huong dan",220,324,20,m); veChuLen("[5]  Ky luc",220,357,20,m);
-        veChuLen("[6]  Thoat",220,390,20,m);
-        if (coFileLuu1P()) veChuLen("[7]  Tiep tuc 1P da luu",220,423,20,Color(100,255,150));
-        if (coFileLuu2P()) veChuLen("[8]  Tiep tuc 2P da luu",220,453,20,Color(255,160,100));
-        veChuLen("KY LUC: "+to_string(m_diemKyLuc),270,490,18,Color(255,200,0));
-    }
-    void veManHinhChonTocDo() {
-        veChuLen("CHON MUC DO",250,140,36,Color(80,160,255));
-        if (m_choDoiKhang) veChuLen("(Che do Doi Khang)",260,188,16,Color(255,120,80));
-        veChuLen("[1]  DE",220,240,22,Color(100,220,100));
-        veChuLen("[2]  TRUNG BINH",220,285,22,Color(220,220,50));
-        veChuLen("[3]  KHO",220,330,22,Color(220,100,100));
-        veChuLen("ESC  Quay lai menu",240,420,16,Color(150,150,180));
-    }
-    void veManHinhHuongDan() {
-        veChuLen("HUONG DAN",280,60,40,Color(80,160,255));
-        veChuLen("--- 1 NGUOI CHOI ---",220,130,18,Color(100,220,100));
-        veChuLen("Arrow Left/Right : Di chuyen",180,162,15);
-        veChuLen("Arrow Up         : Xoay khoi",180,182,15);
-        veChuLen("Arrow Down       : Re nhanh",180,202,15);
-        veChuLen("--- 2 NGUOI CHOI ---",220,240,18,Color(220,100,100));
-        veChuLen("Player 2: A D W S",180,268,15);
-        veChuLen("1 nguoi thua -> nguoi kia choi tiep!",180,290,13,Color(200,200,100));
-        veChuLen("Ca 2 thua -> so diem -> xac dinh thang",180,308,13,Color(200,200,100));
-        veChuLen("--- DOI KHANG (CHE DO 3) ---",220,345,18,Color(255,120,80));
-        veChuLen("Xoa N hang -> gui N hang rac",180,372,14);
-        veChuLen("Hang rac co 1 lo ngau nhien!",180,400,14,Color(200,180,80));
-        veChuLen("--- DIEM SO ---",240,440,18,Color(255,200,0));
-        veChuLen("1 hang=100 | 2 hang=300 | 3 hang=600 | TETRIS=1000",140,465,13);
-        veChuLen("ESC de quay lai",285,510,16,Color(150,150,180));
-    }
-    void veManHinhKyLuc() {
-        veChuLen("KY LUC",310,140,44,Color(255,200,0));
-        RectangleShape k(Vector2f(300,80)); k.setPosition(255,230);
-        k.setFillColor(Color(20,20,50,220)); k.setOutlineThickness(2);
-        k.setOutlineColor(Color(255,200,0)); m_cuaSo.draw(k);
-        veChuLen("DIEM CAO NHAT",278,242,16,Color(200,200,220));
-        veChuLen(to_string(m_diemKyLuc),340,268,30,Color(255,220,50));
-        veChuLen("ESC de quay lai",298,370,16,Color(150,150,180));
-    }
-
-    // ---- Che do choi ----
-    void choi1Nguoi() {
-        m_nguoiChoi1.capNhatHieuUng(m_dt);
-        if (m_nguoiChoi1.getDaGameOver()) {
-            luuKyLuc(m_nguoiChoi1.getDiem()); xoaFileLuu(CauHinh::FILE_LUU_1P);
-            RectangleShape man(Vector2f(820, CauHinh::HANG*CauHinh::O_SIZE+60));
-            man.setFillColor(Color(0,0,0,160)); m_cuaSo.draw(man);
-            veChuLen("GAME OVER",250,220,44,Color(220,60,60));
-            veChuLen("Diem: "+to_string(m_nguoiChoi1.getDiem()),290,280,24);
-            veChuLen("ESC de quay lai",275,330,18,Color(150,150,180));
-            return;
-        }
-        if (m_thoiGianTich > BANG_TOC_DO[m_mucTocDo]) { m_nguoiChoi1.buocRoi(BAN_1P_X); m_thoiGianTich=0; }
-        m_nguoiChoi1.veBanChoi(m_cuaSo, BAN_1P_X, m_phongChu);
-        m_nguoiChoi1.vePanel(m_cuaSo, PANEL_1P_X, 20, m_phongChu, "NGUOI CHOI 1");
-        veChuLen("Arrow: Di chuyen",PANEL_1P_X+8,230,10,Color(120,120,160));
-        veChuLen("Up: Xoay",PANEL_1P_X+8,244,10,Color(120,120,160));
-        veChuLen("Down: Re",PANEL_1P_X+8,258,10,Color(120,120,160));
-        veChuLen("KY LUC",PANEL_1P_X+8,340,12,Color(160,160,200));
-        veChuLen(to_string(m_diemKyLuc),PANEL_1P_X+8,358,18,Color(255,200,0));
-        veChuLen("TOC DO: "+string(NHAN_TOC_DO[m_mucTocDo]),PANEL_1P_X+8,390,11,Color(100,200,255));
-        m_nguoiChoi1.veHieuUngDiem(m_cuaSo, m_phongChu);
-    }
-
-    void choi2Nguoi() {
-        m_nguoiChoi1.capNhatHieuUng(m_dt); m_nguoiChoi2.capNhatHieuUng(m_dt);
-        if (m_nguoiChoi1.getDaGameOver() && !m_nguoiChoi1DaThua) m_nguoiChoi1DaThua=true;
-        if (m_nguoiChoi2.getDaGameOver() && !m_nguoiChoi2DaThua) m_nguoiChoi2DaThua=true;
-        if (m_nguoiChoi1DaThua && m_nguoiChoi2DaThua) {
-            luuKyLuc(max(m_nguoiChoi1.getDiem(), m_nguoiChoi2.getDiem()));
-            xoaFileLuu(CauHinh::FILE_LUU_2P);
-            RectangleShape man(Vector2f(820,CauHinh::HANG*CauHinh::O_SIZE+60));
-            man.setFillColor(Color(0,0,0,160)); m_cuaSo.draw(man);
-            string ten = (m_nguoiChoi1.getDiem()>m_nguoiChoi2.getDiem()) ? "NGUOI CHOI 1 THANG!"
-                       : (m_nguoiChoi2.getDiem()>m_nguoiChoi1.getDiem()) ? "NGUOI CHOI 2 THANG!" : "HOA!";
-            veChuLen("GAME OVER",280,180,40,Color(220,60,60)); veChuLen(ten,230,240,28,Color(255,200,0));
-            veChuLen("P1: "+to_string(m_nguoiChoi1.getDiem())+"  P2: "+to_string(m_nguoiChoi2.getDiem()),230,295,20);
-            veChuLen("ESC de quay lai",295,345,16,Color(150,150,180)); return;
-        }
-        if (m_thoiGianTich > BANG_TOC_DO[m_mucTocDo]) {
-            if (!m_nguoiChoi1DaThua) m_nguoiChoi1.buocRoi(BAN_2P_1_X);
-            if (!m_nguoiChoi2DaThua) m_nguoiChoi2.buocRoi(BAN_2P_2_X);
-            m_thoiGianTich=0;
-        }
-        m_nguoiChoi1.veBanChoi(m_cuaSo,BAN_2P_1_X,m_phongChu); m_nguoiChoi2.veBanChoi(m_cuaSo,BAN_2P_2_X,m_phongChu);
-        m_nguoiChoi1.vePanel(m_cuaSo,PANEL_2P_1_X,10,m_phongChu,"NGUOI CHOI 1");
-        veChuLen("<- -> Di chuyen",PANEL_2P_1_X+5,218,10,Color(120,120,160));
-        veChuLen("Up Xoay/Down Re",PANEL_2P_1_X+5,232,10,Color(120,120,160));
-        m_nguoiChoi2.vePanel(m_cuaSo,PANEL_2P_2_X,10,m_phongChu,"NGUOI CHOI 2");
-        veChuLen("A D Di chuyen",PANEL_2P_2_X+5,218,10,Color(120,120,160));
-        veChuLen("W Xoay/S Re",PANEL_2P_2_X+5,232,10,Color(120,120,160));
-        veChuLen("TOC DO: "+string(NHAN_TOC_DO[m_mucTocDo]),330,CauHinh::HANG*CauHinh::O_SIZE+10,13,Color(100,200,255));
-        if (m_nguoiChoi1DaThua && !m_nguoiChoi2DaThua) veOverlayDaThua(BAN_2P_1_X,"Dang cho...");
-        if (m_nguoiChoi2DaThua && !m_nguoiChoi1DaThua) veOverlayDaThua(BAN_2P_2_X,"Dang cho...");
-        m_nguoiChoi1.veHieuUngDiem(m_cuaSo,m_phongChu); m_nguoiChoi2.veHieuUngDiem(m_cuaSo,m_phongChu);
-    }
-
-    void choiDoiKhang() {
-        m_nguoiChoi1.capNhatHieuUng(m_dt); m_nguoiChoi2.capNhatHieuUng(m_dt);
-        if (m_nguoiChoi1.getDaGameOver() && !m_nguoiChoi1DaThua) m_nguoiChoi1DaThua=true;
-        if (m_nguoiChoi2.getDaGameOver() && !m_nguoiChoi2DaThua) m_nguoiChoi2DaThua=true;
-        if (m_nguoiChoi1DaThua && m_nguoiChoi2DaThua) {
-            luuKyLuc(max(m_nguoiChoi1.getDiem(), m_nguoiChoi2.getDiem()));
-            RectangleShape man(Vector2f(820,CauHinh::HANG*CauHinh::O_SIZE+60));
-            man.setFillColor(Color(0,0,0,170)); m_cuaSo.draw(man);
-            string ten = (m_nguoiChoi1.getDiem()>m_nguoiChoi2.getDiem()) ? "NGUOI CHOI 1 THANG!"
-                       : (m_nguoiChoi2.getDiem()>m_nguoiChoi1.getDiem()) ? "NGUOI CHOI 2 THANG!" : "HOA!";
-            veChuLen("DOI KHANG KET THUC",180,180,36,Color(220,60,60));
-            veChuLen(ten,200,240,30,Color(255,200,0));
-            veChuLen("P1: "+to_string(m_nguoiChoi1.getDiem())+"  P2: "+to_string(m_nguoiChoi2.getDiem()),230,295,22);
-            veChuLen("ESC de quay lai",295,360,16,Color(150,150,180)); return;
-        }
-        if (m_thoiGianTich > BANG_TOC_DO[m_mucTocDo]) {
-            int h1=0, h2=0;
-            if (!m_nguoiChoi1DaThua) h1 = m_nguoiChoi1.buocRoi(BAN_DK_1_X);
-            if (!m_nguoiChoi2DaThua) h2 = m_nguoiChoi2.buocRoi(BAN_DK_2_X);
-            if (h1>0 && !m_nguoiChoi2DaThua) {
-                m_nguoiChoi2.nhanHangRac(h1);
-                HieuUngDiem hu(BAN_DK_2_X+CauHinh::COT*CauHinh::O_SIZE/2.f,80,h1*100);
-                hu.setNoiDung("+"+to_string(h1)+" RAC!");
-                m_nguoiChoi2.getDanhSachHieuUng().push_back(hu);
-            }
-            if (h2>0 && !m_nguoiChoi1DaThua) {
-                m_nguoiChoi1.nhanHangRac(h2);
-                HieuUngDiem hu(BAN_DK_1_X+CauHinh::COT*CauHinh::O_SIZE/2.f,80,h2*100);
-                hu.setNoiDung("+"+to_string(h2)+" RAC!");
-                m_nguoiChoi1.getDanhSachHieuUng().push_back(hu);
-            }
-            m_thoiGianTich=0;
-        }
-        m_nguoiChoi1.veBanChoi(m_cuaSo,BAN_DK_1_X,m_phongChu); m_nguoiChoi2.veBanChoi(m_cuaSo,BAN_DK_2_X,m_phongChu);
-        m_nguoiChoi1.vePanel(m_cuaSo,PANEL_DK_1_X,10,m_phongChu,"P1");
-        veChuLen("<- -> Di chuyen",PANEL_DK_1_X+3,210,9,Color(120,120,160));
-        veChuLen("Up Xoay",PANEL_DK_1_X+3,223,9,Color(120,120,160));
-        veChuLen("Down Re",PANEL_DK_1_X+3,236,9,Color(120,120,160));
-        m_nguoiChoi2.vePanel(m_cuaSo,PANEL_DK_2_X,10,m_phongChu,"P2");
-        veChuLen("A D Di chuyen",PANEL_DK_2_X+3,210,9,Color(120,120,160));
-        veChuLen("W Xoay/S Re",PANEL_DK_2_X+3,223,9,Color(120,120,160));
-        veChuLen("DOI KHANG",330,CauHinh::HANG*CauHinh::O_SIZE+5,16,Color(255,100,100));
-        veChuLen("Xoa hang -> gui rac ngay!",255,CauHinh::HANG*CauHinh::O_SIZE+25,12,Color(200,200,100));
-        veChuLen("TOC DO: "+string(NHAN_TOC_DO[m_mucTocDo]),310,CauHinh::HANG*CauHinh::O_SIZE+42,11,Color(100,200,255));
-        if (m_nguoiChoi1DaThua && !m_nguoiChoi2DaThua) veOverlayDaThua(BAN_DK_1_X,"Dang cho P2...");
-        if (m_nguoiChoi2DaThua && !m_nguoiChoi1DaThua) veOverlayDaThua(BAN_DK_2_X,"Dang cho P1...");
-        veMuiTenDoiKhangGiua();
-        m_nguoiChoi1.veHieuUngDiem(m_cuaSo,m_phongChu); m_nguoiChoi2.veHieuUngDiem(m_cuaSo,m_phongChu);
-    }
-
-public:
-    // ---- Getters ----
-    int  getDiemKyLuc()   const { return m_diemKyLuc; }
-    int  getMucTocDo()    const { return m_mucTocDo; }
-    bool getCho2Nguoi()   const { return m_cho2Nguoi; }
-    bool getChoDoiKhang() const { return m_choDoiKhang; }
-
-    // ---- Setters ----
-    void setMucTocDo(int v)     { m_mucTocDo = v; }
-    void setCho2Nguoi(bool v)   { m_cho2Nguoi = v; }
-    void setChoDoiKhang(bool v) { m_choDoiKhang = v; }
-
-    TroChoi() : m_cuaSo(VideoMode(820, CauHinh::HANG*CauHinh::O_SIZE+60), "Xep Hinh") {
-        srand((unsigned int)time(0));
-        try {
-            if (!m_phongChu.loadFromFile("C:/Windows/Fonts/arial.ttf"))
-                throw runtime_error("Khong tim thay font arial");
-        } catch (...) {
-            if (!m_phongChu.loadFromFile("/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf"))
-                cerr << "[CANH BAO] Khong tai duoc font chu.\n";
-        }
-        docKyLuc();
-    }
-
-    void chay() {
-        while (m_cuaSo.isOpen()) {
-            m_dt = m_dongHo.restart().asSeconds();
-            if (m_dt > 0.1f) m_dt = 0.1f;
-            m_thoiGianTich += m_dt;
-            Event sk;
-            while (m_cuaSo.pollEvent(sk)) {
-                if (sk.type == Event::Closed) {
-                    if (m_trangThai==TrangThaiGame::Choi1Nguoi) luuGame1Nguoi();
-                    if (m_trangThai==TrangThaiGame::Choi2Nguoi) luuGame2Nguoi();
-                    m_cuaSo.close();
-                }
-                if (sk.type == Event::KeyPressed) xuLyPhimNhan(sk);
-            }
-            m_cuaSo.clear(Color(10,10,22));
-            switch (m_trangThai) {
-            case TrangThaiGame::Menu:       veManHinhMenu();      break;
-            case TrangThaiGame::ChonTocDo:  veManHinhChonTocDo(); break;
-            case TrangThaiGame::Choi1Nguoi: choi1Nguoi();         break;
-            case TrangThaiGame::Choi2Nguoi: choi2Nguoi();         break;
-            case TrangThaiGame::DoiKhang:   choiDoiKhang();       break;
-            case TrangThaiGame::HuongDan:   veManHinhHuongDan();  break;
-            case TrangThaiGame::KyLuc:      veManHinhKyLuc();     break;
-            }
-            m_cuaSo.display();
         }
     }
 };
@@ -835,30 +508,515 @@ void chayKiemThu() {
         bool ok = true;
         for (int i = 0; i < CauHinh::HANG; i++)
             for (int j = 0; j < CauHinh::COT; j++)
-                if (b.getLuoi(i,j) != 0) { ok = false; break; }
-        if (ok) { cout<<"[PASS] khoiDong() xoa sach luoi\n"; quaDuoc++; }
-        else    { cout<<"[FAIL] khoiDong() luoi chua duoc xoa\n"; thatBai++; }
+                if (b.luoi[i][j] != 0) { ok = false; break; }
+        if (ok) { cout << "[PASS] khoiDong() xoa sach luoi\n";         quaDuoc++; }
+        else    { cout << "[FAIL] khoiDong() luoi chua duoc xoa\n";    thatBai++; }
     }
     {
         BanChoiDon b; b.khoiDong(Color::White);
         for (int i = 0; i < 20; i++) b.diChuyen(-1);
         bool ok = true;
-        for (int i = 0; i < 4; i++) if (b.getKhoiHienTai(i).x < 0) { ok=false; break; }
-        if (ok) { cout<<"[PASS] diChuyen() khong vuot bien trai\n"; quaDuoc++; }
-        else    { cout<<"[FAIL] diChuyen() vuot bien trai\n"; thatBai++; }
+        for (int i = 0; i < 4; i++) if (b.khoiHienTai[i].x < 0) { ok = false; break; }
+        if (ok) { cout << "[PASS] diChuyen() khong vuot bien trai\n";  quaDuoc++; }
+        else    { cout << "[FAIL] diChuyen() vuot bien trai\n";        thatBai++; }
     }
     {
         BanChoiDon b; b.khoiDong(Color::White);
         for (int i = 0; i < 20; i++) b.diChuyen(1);
         bool ok = true;
-        for (int i = 0; i < 4; i++) if (b.getKhoiHienTai(i).x >= CauHinh::COT) { ok=false; break; }
-        if (ok) { cout<<"[PASS] diChuyen() khong vuot bien phai\n"; quaDuoc++; }
-        else    { cout<<"[FAIL] diChuyen() vuot bien phai\n"; thatBai++; }
+        for (int i = 0; i < 4; i++) if (b.khoiHienTai[i].x >= CauHinh::COT) { ok = false; break; }
+        if (ok) { cout << "[PASS] diChuyen() khong vuot bien phai\n";  quaDuoc++; }
+        else    { cout << "[FAIL] diChuyen() vuot bien phai\n";        thatBai++; }
     }
-    cout<<"\nKet qua: "<<quaDuoc<<" qua, "<<thatBai<<" that bai\n";
-    if (thatBai > 0) { cerr<<"Co kiem thu THAT BAI.\n"; exit(1); }
+    cout << "\nKet qua: " << quaDuoc << " qua, " << thatBai << " that bai\n";
+    if (thatBai > 0) { cerr << "Co kiem thu THAT BAI.\n"; exit(1); }
 }
 #endif
+
+// ============================================================
+//  CLASS TROCHOI - quan ly vong lap chinh va cac che do choi
+// ============================================================
+class TroChoi {
+    RenderWindow cuaSo;
+    Font phongChu;
+
+    enum class TrangThaiGame {
+        Menu, ChonTocDo,
+        Choi1Nguoi, Choi2Nguoi, DoiKhang,
+        HuongDan, KyLuc
+    };
+    TrangThaiGame trangThai = TrangThaiGame::Menu;
+
+    BanChoiDon nguoiChoi1, nguoiChoi2;
+    Clock dongHo;
+    float thoiGianTich = 0, dt = 0;
+    int   diemKyLuc    = 0;
+    int   mucTocDo     = 1;
+    bool  cho2Nguoi    = false;
+    bool  choDoiKhang  = false;
+
+    // Trang thai chet rieng biet: cho phep nguoi con lai choi tiep
+    bool nguoiChoi1DaThua = false;
+    bool nguoiChoi2DaThua = false;
+
+    // --- Toa do cac ban choi ---
+    static constexpr int BAN_1P_X     = 200;
+    static constexpr int PANEL_1P_X   = 210 + CauHinh::COT * CauHinh::O_SIZE + 10;
+
+    static constexpr int BAN_2P_1_X   = 20;
+    static constexpr int PANEL_2P_1_X = 20  + CauHinh::COT * CauHinh::O_SIZE + 5;
+    static constexpr int BAN_2P_2_X   = 450;
+    static constexpr int PANEL_2P_2_X = 450 + CauHinh::COT * CauHinh::O_SIZE + 5;
+
+    static constexpr int BAN_DK_1_X   = 10;
+    static constexpr int PANEL_DK_1_X = 10  + CauHinh::COT * CauHinh::O_SIZE + 5;
+    static constexpr int BAN_DK_2_X   = 440;
+    static constexpr int PANEL_DK_2_X = 440 + CauHinh::COT * CauHinh::O_SIZE + 5;
+
+    // ----------------------------------------------------------
+    void docKyLuc() {
+        try { ifstream f(CauHinh::FILE_KY_LUC); if (f) f >> diemKyLuc; }
+        catch (...) { diemKyLuc = 0; }
+    }
+
+    void luuKyLuc(int diem) {
+        try {
+            if (diem > diemKyLuc) {
+                diemKyLuc = diem;
+                ofstream f(CauHinh::FILE_KY_LUC);
+                if (f) f << diemKyLuc;
+            }
+        } catch (...) {}
+    }
+
+    void luuGame1Nguoi() {
+        try {
+            ofstream f(CauHinh::FILE_LUU_1P, ios::binary); if (!f) return;
+            nguoiChoi1.luuTrangThai(f);
+            ghiSoNguyen(f, mucTocDo);
+        } catch (...) {}
+    }
+
+    bool napGame1Nguoi() {
+        try {
+            ifstream f(CauHinh::FILE_LUU_1P, ios::binary); if (!f) return false;
+            nguoiChoi1.khoiDong(Color(50,220,80));
+            nguoiChoi1.napTrangThai(f);
+            mucTocDo = docSoNguyen(f);
+            if (mucTocDo < 0 || mucTocDo > 2) mucTocDo = 1;
+            return true;
+        } catch (...) { return false; }
+    }
+
+    void luuGame2Nguoi() {
+        try {
+            ofstream f(CauHinh::FILE_LUU_2P, ios::binary); if (!f) return;
+            nguoiChoi1.luuTrangThai(f);
+            nguoiChoi2.luuTrangThai(f);
+            ghiSoNguyen(f, mucTocDo);
+        } catch (...) {}
+    }
+
+    bool napGame2Nguoi() {
+        try {
+            ifstream f(CauHinh::FILE_LUU_2P, ios::binary); if (!f) return false;
+            nguoiChoi1.khoiDong(Color(50,220,80));
+            nguoiChoi2.khoiDong(Color(220,80,80));
+            nguoiChoi1.napTrangThai(f);
+            nguoiChoi2.napTrangThai(f);
+            mucTocDo = docSoNguyen(f);
+            if (mucTocDo < 0 || mucTocDo > 2) mucTocDo = 1;
+            return true;
+        } catch (...) { return false; }
+    }
+
+    void xoaFileLuu(const char* duong_dan) { remove(duong_dan); }
+
+    bool coFileLuu1P() { ifstream f(CauHinh::FILE_LUU_1P, ios::binary); return f.good(); }
+    bool coFileLuu2P() { ifstream f(CauHinh::FILE_LUU_2P, ios::binary); return f.good(); }
+
+    void veChuLen(const string& noi_dung, int x, int y, int co_chu = 20, Color mau = Color::White) {
+        Text t(noi_dung, phongChu, co_chu);
+        t.setPosition((float)x, (float)y);
+        t.setFillColor(mau);
+        cuaSo.draw(t);
+    }
+
+    // Overlay "THUA" len ban cua nguoi da thua khi nguoi kia van choi tiep
+    void veOverlayDaThua(int viTriNgang, const string& dongChu2) {
+        RectangleShape man(Vector2f(CauHinh::COT * CauHinh::O_SIZE, CauHinh::HANG * CauHinh::O_SIZE));
+        man.setPosition(viTriNgang, 0);
+        man.setFillColor(Color(0, 0, 0, 180));
+        cuaSo.draw(man);
+
+        Text chuThua("THUA", phongChu, 32);
+        chuThua.setFillColor(Color(220, 60, 60));
+        chuThua.setPosition(
+            viTriNgang + CauHinh::COT * CauHinh::O_SIZE / 2.f - chuThua.getLocalBounds().width / 2.f,
+            CauHinh::HANG * CauHinh::O_SIZE / 2.f - 20);
+        cuaSo.draw(chuThua);
+
+        Text chuCho(dongChu2, phongChu, 14);
+        chuCho.setFillColor(Color(200, 200, 200));
+        chuCho.setPosition(
+            viTriNgang + CauHinh::COT * CauHinh::O_SIZE / 2.f - chuCho.getLocalBounds().width / 2.f,
+            CauHinh::HANG * CauHinh::O_SIZE / 2.f + 22);
+        cuaSo.draw(chuCho);
+    }
+
+    void veMuiTenDoiKhangGiua() {
+        int cx = 415, cy = CauHinh::HANG * CauHinh::O_SIZE / 2;
+        RectangleShape thanh(Vector2f(30, 4));
+        thanh.setFillColor(Color(200, 200, 60));
+        thanh.setPosition(cx - 15, cy - 2);
+        cuaSo.draw(thanh);
+
+        ConvexShape dauTrai; dauTrai.setPointCount(3);
+        dauTrai.setPoint(0,{0,0}); dauTrai.setPoint(1,{10,-7}); dauTrai.setPoint(2,{10,7});
+        dauTrai.setFillColor(Color(200, 200, 60));
+        dauTrai.setPosition(cx - 15, cy);
+        cuaSo.draw(dauTrai);
+
+        ConvexShape dauPhai; dauPhai.setPointCount(3);
+        dauPhai.setPoint(0,{10,0}); dauPhai.setPoint(1,{0,-7}); dauPhai.setPoint(2,{0,7});
+        dauPhai.setFillColor(Color(200, 200, 60));
+        dauPhai.setPosition(cx + 5, cy);
+        cuaSo.draw(dauPhai);
+    }
+
+    // ----------------------------------------------------------
+    void batDauGame() {
+        nguoiChoi1DaThua = false;
+        nguoiChoi2DaThua = false;
+        if (choDoiKhang) {
+            nguoiChoi1.khoiDong(Color(50,220,80));
+            nguoiChoi2.khoiDong(Color(220,80,80));
+            trangThai = TrangThaiGame::DoiKhang;
+        } else if (!cho2Nguoi) {
+            nguoiChoi1.khoiDong(Color(50,220,80));
+            trangThai = TrangThaiGame::Choi1Nguoi;
+        } else {
+            nguoiChoi1.khoiDong(Color(50,220,80));
+            nguoiChoi2.khoiDong(Color(220,80,80));
+            trangThai = TrangThaiGame::Choi2Nguoi;
+        }
+        thoiGianTich = 0;
+    }
+
+    // ----------------------------------------------------------
+    //  XU LY PHIM NHAN
+    // ----------------------------------------------------------
+    void xuLyPhimNhan(Event& su_kien) {
+        using KB = Keyboard;
+        using TS = TrangThaiGame;
+
+        if (trangThai == TS::Menu) {
+            if (su_kien.key.code == KB::Num1) { cho2Nguoi=false; choDoiKhang=false; trangThai=TS::ChonTocDo; }
+            if (su_kien.key.code == KB::Num2) { cho2Nguoi=true;  choDoiKhang=false; trangThai=TS::ChonTocDo; }
+            if (su_kien.key.code == KB::Num3) { cho2Nguoi=false; choDoiKhang=true;  trangThai=TS::ChonTocDo; }
+            if (su_kien.key.code == KB::Num4) trangThai = TS::HuongDan;
+            if (su_kien.key.code == KB::Num5) trangThai = TS::KyLuc;
+            if (su_kien.key.code == KB::Num6) cuaSo.close();
+            if (su_kien.key.code == KB::Num7 && coFileLuu1P())
+                if (napGame1Nguoi()) { trangThai = TS::Choi1Nguoi; thoiGianTich = 0; }
+            if (su_kien.key.code == KB::Num8 && coFileLuu2P())
+                if (napGame2Nguoi()) { trangThai = TS::Choi2Nguoi; thoiGianTich = 0; }
+        }
+        else if (trangThai == TS::ChonTocDo) {
+            if (su_kien.key.code == KB::Num1) { mucTocDo = 0; batDauGame(); }
+            if (su_kien.key.code == KB::Num2) { mucTocDo = 1; batDauGame(); }
+            if (su_kien.key.code == KB::Num3) { mucTocDo = 2; batDauGame(); }
+            if (su_kien.key.code == KB::Escape) trangThai = TS::Menu;
+        }
+        else {
+            if (su_kien.key.code == KB::Escape) {
+                if (trangThai == TS::Choi1Nguoi) luuGame1Nguoi();
+                if (trangThai == TS::Choi2Nguoi) luuGame2Nguoi();
+                trangThai = TS::Menu;
+            }
+            bool nc1CoTheDiChuyen = (trangThai==TS::Choi1Nguoi ||
+                                     trangThai==TS::Choi2Nguoi ||
+                                     trangThai==TS::DoiKhang) && !nguoiChoi1DaThua;
+            if (nc1CoTheDiChuyen) {
+                if (su_kien.key.code == KB::Left)  nguoiChoi1.diChuyen(-1);
+                if (su_kien.key.code == KB::Right) nguoiChoi1.diChuyen(1);
+                if (su_kien.key.code == KB::Up)    nguoiChoi1.xoay();
+                if (su_kien.key.code == KB::Down)  nguoiChoi1.reNhanh();
+            }
+            bool nc2CoTheDiChuyen = (trangThai==TS::Choi2Nguoi ||
+                                     trangThai==TS::DoiKhang) && !nguoiChoi2DaThua;
+            if (nc2CoTheDiChuyen) {
+                if (su_kien.key.code == KB::A) nguoiChoi2.diChuyen(-1);
+                if (su_kien.key.code == KB::D) nguoiChoi2.diChuyen(1);
+                if (su_kien.key.code == KB::W) nguoiChoi2.xoay();
+                if (su_kien.key.code == KB::S) nguoiChoi2.reNhanh();
+            }
+        }
+    }
+
+    // ----------------------------------------------------------
+    //  CAC HAM VE MAN HINH
+    // ----------------------------------------------------------
+    void veManHinhMenu() {
+        for (int i = 0; i < 3; i++) {
+            CircleShape anhSang(120 + i * 30);
+            anhSang.setFillColor(Color(30-i*8, 30-i*8, 80-i*20, 40));
+            anhSang.setPosition(300, 180);
+            cuaSo.draw(anhSang);
+        }
+        veChuLen("XEP HINH",          240, 100, 68, Color(80,160,255));
+        Color mauBinhThuong(200, 200, 220);
+        veChuLen("[1]  1 Nguoi choi",  220, 225, 20, mauBinhThuong);
+        veChuLen("[2]  2 Nguoi choi",  220, 258, 20, mauBinhThuong);
+        veChuLen("[3]  Doi Khang",     220, 291, 20, Color(255,120,80));
+        veChuLen("[4]  Huong dan",     220, 324, 20, mauBinhThuong);
+        veChuLen("[5]  Ky luc",        220, 357, 20, mauBinhThuong);
+        veChuLen("[6]  Thoat",         220, 390, 20, mauBinhThuong);
+        if (coFileLuu1P()) veChuLen("[7]  Tiep tuc 1P da luu", 220, 423, 20, Color(100,255,150));
+        if (coFileLuu2P()) veChuLen("[8]  Tiep tuc 2P da luu", 220, 453, 20, Color(255,160,100));
+        veChuLen("KY LUC: " + to_string(diemKyLuc), 270, 490, 18, Color(255,200,0));
+    }
+
+    void veManHinhChonTocDo() {
+        veChuLen("CHON MUC DO",            250, 140, 36, Color(80,160,255));
+        if (choDoiKhang) veChuLen("(Che do Doi Khang)", 260, 188, 16, Color(255,120,80));
+        veChuLen("[1]  DE",                220, 240, 22, Color(100,220,100));
+        veChuLen("[2]  TRUNG BINH",        220, 285, 22, Color(220,220,50));
+        veChuLen("[3]  KHO",               220, 330, 22, Color(220,100,100));
+        veChuLen("ESC  Quay lai menu",     240, 420, 16, Color(150,150,180));
+    }
+
+    void veManHinhHuongDan() {
+        veChuLen("HUONG DAN",                                          280, 60,  40, Color(80,160,255));
+        veChuLen("--- 1 NGUOI CHOI ---",                              220, 130, 18, Color(100,220,100));
+        veChuLen("Arrow Left/Right : Di chuyen",                      180, 162, 15);
+        veChuLen("Arrow Up         : Xoay khoi",                      180, 182, 15);
+        veChuLen("Arrow Down       : Re nhanh",                       180, 202, 15);
+        veChuLen("--- 2 NGUOI CHOI ---",                              220, 240, 18, Color(220,100,100));
+        veChuLen("Player 2: A D W S",                                 180, 268, 15);
+        veChuLen("1 nguoi thua -> nguoi kia choi tiep!",              180, 290, 13, Color(200,200,100));
+        veChuLen("Ca 2 thua -> so diem -> xac dinh thang",            180, 308, 13, Color(200,200,100));
+        veChuLen("--- DOI KHANG (CHE DO 3) ---",                      220, 345, 18, Color(255,120,80));
+        veChuLen("Xoa 1 hang -> gui 1 hang rac",                      180, 372, 14);
+        veChuLen("Xoa 2 hang -> gui 2 hang rac",                      180, 390, 14);
+        veChuLen("Xoa 3 hang -> gui 3 hang rac",                      180, 408, 14);
+        veChuLen("Xoa 4 hang -> gui 4 hang rac",                      180, 426, 14);
+        veChuLen("Hang rac co 1 lo ngau nhien!",                      180, 444, 14, Color(200,180,80));
+        veChuLen("Nguoi thua truoc -> nguoi kia choi tiep",           180, 462, 13, Color(200,200,100));
+        veChuLen("--- DIEM SO ---",                                    240, 490, 18, Color(255,200,0));
+        veChuLen("1 hang=100 | 2 hang=300 | 3 hang=600 | TETRIS=1000",140, 515, 13);
+        veChuLen("ESC de quay lai",                                    285, 545, 16, Color(150,150,180));
+    }
+
+    void veManHinhKyLuc() {
+        veChuLen("KY LUC", 310, 140, 44, Color(255,200,0));
+        RectangleShape khung(Vector2f(300, 80));
+        khung.setPosition(255, 230);
+        khung.setFillColor(Color(20,20,50,220));
+        khung.setOutlineThickness(2);
+        khung.setOutlineColor(Color(255,200,0));
+        cuaSo.draw(khung);
+        veChuLen("DIEM CAO NHAT",         278, 242, 16, Color(200,200,220));
+        veChuLen(to_string(diemKyLuc),    340, 268, 30, Color(255,220,50));
+        veChuLen("ESC de quay lai",        298, 370, 16, Color(150,150,180));
+    }
+
+    // ----------------------------------------------------------
+    //  CHE DO 1 NGUOI CHOI
+    // ----------------------------------------------------------
+    void choi1Nguoi() {
+        nguoiChoi1.capNhatHieuUng(dt);
+        if (nguoiChoi1.daGameOver) {
+            luuKyLuc(nguoiChoi1.diem);
+            xoaFileLuu(CauHinh::FILE_LUU_1P);
+            RectangleShape man(Vector2f(820, CauHinh::HANG * CauHinh::O_SIZE + 60));
+            man.setFillColor(Color(0,0,0,160)); cuaSo.draw(man);
+            veChuLen("GAME OVER",                         250, 220, 44, Color(220,60,60));
+            veChuLen("Diem: " + to_string(nguoiChoi1.diem), 290, 280, 24);
+            veChuLen("ESC de quay lai",                   275, 330, 18, Color(150,150,180));
+            return;
+        }
+        if (thoiGianTich > BANG_TOC_DO[mucTocDo]) { nguoiChoi1.buocRoi(BAN_1P_X); thoiGianTich = 0; }
+        nguoiChoi1.veBanChoi(cuaSo, BAN_1P_X, phongChu);
+        nguoiChoi1.vePanel(cuaSo, PANEL_1P_X, 20, phongChu, "NGUOI CHOI 1");
+        veChuLen("Arrow: Di chuyen",  PANEL_1P_X+8, 230, 10, Color(120,120,160));
+        veChuLen("Up: Xoay",          PANEL_1P_X+8, 244, 10, Color(120,120,160));
+        veChuLen("Down: Re",          PANEL_1P_X+8, 258, 10, Color(120,120,160));
+        veChuLen("KY LUC",            PANEL_1P_X+8, 340, 12, Color(160,160,200));
+        veChuLen(to_string(diemKyLuc),PANEL_1P_X+8, 358, 18, Color(255,200,0));
+        veChuLen("TOC DO: " + string(NHAN_TOC_DO[mucTocDo]), PANEL_1P_X+8, 390, 11, Color(100,200,255));
+        nguoiChoi1.veHieuUngDiem(cuaSo, phongChu);
+    }
+
+    // ----------------------------------------------------------
+    //  CHE DO 2 NGUOI CHOI
+    //  - 1 nguoi thua -> nguoi kia choi tiep
+    //  - ca 2 thua -> so diem xac dinh thang/thua
+    // ----------------------------------------------------------
+    void choi2Nguoi() {
+        nguoiChoi1.capNhatHieuUng(dt);
+        nguoiChoi2.capNhatHieuUng(dt);
+
+        if (nguoiChoi1.daGameOver && !nguoiChoi1DaThua) nguoiChoi1DaThua = true;
+        if (nguoiChoi2.daGameOver && !nguoiChoi2DaThua) nguoiChoi2DaThua = true;
+
+        if (nguoiChoi1DaThua && nguoiChoi2DaThua) {
+            luuKyLuc(max(nguoiChoi1.diem, nguoiChoi2.diem));
+            xoaFileLuu(CauHinh::FILE_LUU_2P);
+            RectangleShape man(Vector2f(820, CauHinh::HANG * CauHinh::O_SIZE + 60));
+            man.setFillColor(Color(0,0,0,160)); cuaSo.draw(man);
+            string tenNguoiThang;
+            if      (nguoiChoi1.diem > nguoiChoi2.diem) tenNguoiThang = "NGUOI CHOI 1 THANG!";
+            else if (nguoiChoi2.diem > nguoiChoi1.diem) tenNguoiThang = "NGUOI CHOI 2 THANG!";
+            else                                         tenNguoiThang = "HOA!";
+            veChuLen("GAME OVER",    280, 180, 40, Color(220,60,60));
+            veChuLen(tenNguoiThang,  230, 240, 28, Color(255,200,0));
+            veChuLen("P1: " + to_string(nguoiChoi1.diem) + "  P2: " + to_string(nguoiChoi2.diem), 230, 295, 20);
+            veChuLen("ESC de quay lai", 295, 345, 16, Color(150,150,180));
+            return;
+        }
+
+        if (thoiGianTich > BANG_TOC_DO[mucTocDo]) {
+            if (!nguoiChoi1DaThua) nguoiChoi1.buocRoi(BAN_2P_1_X);
+            if (!nguoiChoi2DaThua) nguoiChoi2.buocRoi(BAN_2P_2_X);
+            thoiGianTich = 0;
+        }
+
+        nguoiChoi1.veBanChoi(cuaSo, BAN_2P_1_X, phongChu);
+        nguoiChoi2.veBanChoi(cuaSo, BAN_2P_2_X, phongChu);
+        nguoiChoi1.vePanel(cuaSo, PANEL_2P_1_X, 10, phongChu, "NGUOI CHOI 1");
+        veChuLen("<- -> Di chuyen",   PANEL_2P_1_X+5, 218, 10, Color(120,120,160));
+        veChuLen("Up Xoay / Down Re", PANEL_2P_1_X+5, 232, 10, Color(120,120,160));
+        nguoiChoi2.vePanel(cuaSo, PANEL_2P_2_X, 10, phongChu, "NGUOI CHOI 2");
+        veChuLen("A D Di chuyen",     PANEL_2P_2_X+5, 218, 10, Color(120,120,160));
+        veChuLen("W Xoay / S Re",     PANEL_2P_2_X+5, 232, 10, Color(120,120,160));
+        veChuLen("TOC DO: " + string(NHAN_TOC_DO[mucTocDo]),
+                 330, CauHinh::HANG * CauHinh::O_SIZE + 10, 13, Color(100,200,255));
+
+        if (nguoiChoi1DaThua && !nguoiChoi2DaThua) veOverlayDaThua(BAN_2P_1_X, "Dang cho...");
+        if (nguoiChoi2DaThua && !nguoiChoi1DaThua) veOverlayDaThua(BAN_2P_2_X, "Dang cho...");
+
+        nguoiChoi1.veHieuUngDiem(cuaSo, phongChu);
+        nguoiChoi2.veHieuUngDiem(cuaSo, phongChu);
+    }
+
+    // ----------------------------------------------------------
+    //  CHE DO DOI KHANG
+    //  - Xoa N hang -> gui N hang rac sang doi thu
+    //  - 1 nguoi thua -> nguoi kia choi tiep -> so diem cuoi
+    // ----------------------------------------------------------
+    void choiDoiKhang() {
+        nguoiChoi1.capNhatHieuUng(dt);
+        nguoiChoi2.capNhatHieuUng(dt);
+
+        if (nguoiChoi1.daGameOver && !nguoiChoi1DaThua) nguoiChoi1DaThua = true;
+        if (nguoiChoi2.daGameOver && !nguoiChoi2DaThua) nguoiChoi2DaThua = true;
+
+        if (nguoiChoi1DaThua && nguoiChoi2DaThua) {
+            luuKyLuc(max(nguoiChoi1.diem, nguoiChoi2.diem));
+            RectangleShape man(Vector2f(820, CauHinh::HANG * CauHinh::O_SIZE + 60));
+            man.setFillColor(Color(0,0,0,170)); cuaSo.draw(man);
+            string tenNguoiThang;
+            if      (nguoiChoi1.diem > nguoiChoi2.diem) tenNguoiThang = "NGUOI CHOI 1 THANG!";
+            else if (nguoiChoi2.diem > nguoiChoi1.diem) tenNguoiThang = "NGUOI CHOI 2 THANG!";
+            else                                         tenNguoiThang = "HOA!";
+            veChuLen("DOI KHANG KET THUC", 180, 180, 36, Color(220,60,60));
+            veChuLen(tenNguoiThang,         200, 240, 30, Color(255,200,0));
+            veChuLen("P1: " + to_string(nguoiChoi1.diem) + "  P2: " + to_string(nguoiChoi2.diem), 230, 295, 22);
+            veChuLen("ESC de quay lai",     295, 360, 16, Color(150,150,180));
+            return;
+        }
+
+        if (thoiGianTich > BANG_TOC_DO[mucTocDo]) {
+            int soHangNC1 = 0, soHangNC2 = 0;
+            if (!nguoiChoi1DaThua) soHangNC1 = nguoiChoi1.buocRoi(BAN_DK_1_X);
+            if (!nguoiChoi2DaThua) soHangNC2 = nguoiChoi2.buocRoi(BAN_DK_2_X);
+
+            // Xoa N hang -> gui N hang rac sang doi thu con song
+            if (soHangNC1 > 0 && !nguoiChoi2DaThua) {
+                nguoiChoi2.nhanHangRac(soHangNC1);
+                float gx = BAN_DK_2_X + CauHinh::COT * CauHinh::O_SIZE / 2.f;
+                HieuUngDiem hu(gx, 80, soHangNC1 * 100);
+                hu.noiDung = "+" + to_string(soHangNC1) + " RAC!";
+                nguoiChoi2.danhSachHieuUng.push_back(hu);
+            }
+            if (soHangNC2 > 0 && !nguoiChoi1DaThua) {
+                nguoiChoi1.nhanHangRac(soHangNC2);
+                float gx = BAN_DK_1_X + CauHinh::COT * CauHinh::O_SIZE / 2.f;
+                HieuUngDiem hu(gx, 80, soHangNC2 * 100);
+                hu.noiDung = "+" + to_string(soHangNC2) + " RAC!";
+                nguoiChoi1.danhSachHieuUng.push_back(hu);
+            }
+            thoiGianTich = 0;
+        }
+
+        nguoiChoi1.veBanChoi(cuaSo, BAN_DK_1_X, phongChu);
+        nguoiChoi2.veBanChoi(cuaSo, BAN_DK_2_X, phongChu);
+        nguoiChoi1.vePanel(cuaSo, PANEL_DK_1_X, 10, phongChu, "P1");
+        veChuLen("<- -> Di chuyen",  PANEL_DK_1_X+3, 210, 9, Color(120,120,160));
+        veChuLen("Up Xoay",          PANEL_DK_1_X+3, 223, 9, Color(120,120,160));
+        veChuLen("Down Re",          PANEL_DK_1_X+3, 236, 9, Color(120,120,160));
+        nguoiChoi2.vePanel(cuaSo, PANEL_DK_2_X, 10, phongChu, "P2");
+        veChuLen("A D Di chuyen",    PANEL_DK_2_X+3, 210, 9, Color(120,120,160));
+        veChuLen("W Xoay / S Re",    PANEL_DK_2_X+3, 223, 9, Color(120,120,160));
+        veChuLen("DOI KHANG",
+                 330, CauHinh::HANG * CauHinh::O_SIZE + 5,  16, Color(255,100,100));
+        veChuLen("Xoa hang -> gui rac ngay!",
+                 255, CauHinh::HANG * CauHinh::O_SIZE + 25, 12, Color(200,200,100));
+        veChuLen("TOC DO: " + string(NHAN_TOC_DO[mucTocDo]),
+                 310, CauHinh::HANG * CauHinh::O_SIZE + 42, 11, Color(100,200,255));
+
+        if (nguoiChoi1DaThua && !nguoiChoi2DaThua) veOverlayDaThua(BAN_DK_1_X, "Dang cho P2...");
+        if (nguoiChoi2DaThua && !nguoiChoi1DaThua) veOverlayDaThua(BAN_DK_2_X, "Dang cho P1...");
+
+        veMuiTenDoiKhangGiua();
+        nguoiChoi1.veHieuUngDiem(cuaSo, phongChu);
+        nguoiChoi2.veHieuUngDiem(cuaSo, phongChu);
+    }
+
+public:
+    TroChoi() : cuaSo(VideoMode(820, CauHinh::HANG * CauHinh::O_SIZE + 60), "Xep Hinh") {
+        srand((unsigned int)time(0));
+        try {
+            if (!phongChu.loadFromFile("C:/Windows/Fonts/arial.ttf"))
+                throw runtime_error("Khong tim thay font arial");
+        } catch (...) {
+            if (!phongChu.loadFromFile("/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf"))
+                cerr << "[CANH BAO] Khong tai duoc font chu.\n";
+        }
+        docKyLuc();
+    }
+
+    void chay() {
+        while (cuaSo.isOpen()) {
+            dt = dongHo.restart().asSeconds();
+            if (dt > 0.1f) dt = 0.1f;
+            thoiGianTich += dt;
+
+            Event su_kien;
+            while (cuaSo.pollEvent(su_kien)) {
+                if (su_kien.type == Event::Closed) {
+                    if (trangThai == TrangThaiGame::Choi1Nguoi) luuGame1Nguoi();
+                    if (trangThai == TrangThaiGame::Choi2Nguoi) luuGame2Nguoi();
+                    cuaSo.close();
+                }
+                if (su_kien.type == Event::KeyPressed) xuLyPhimNhan(su_kien);
+            }
+
+            cuaSo.clear(Color(10, 10, 22));
+            switch (trangThai) {
+                case TrangThaiGame::Menu:        veManHinhMenu();       break;
+                case TrangThaiGame::ChonTocDo:   veManHinhChonTocDo();  break;
+                case TrangThaiGame::Choi1Nguoi:  choi1Nguoi();          break;
+                case TrangThaiGame::Choi2Nguoi:  choi2Nguoi();          break;
+                case TrangThaiGame::DoiKhang:    choiDoiKhang();        break;
+                case TrangThaiGame::HuongDan:    veManHinhHuongDan();   break;
+                case TrangThaiGame::KyLuc:       veManHinhKyLuc();      break;
+            }
+            cuaSo.display();
+        }
+    }
+};
 
 // ============================================================
 //  MAIN
@@ -868,8 +1026,11 @@ int main() {
     chayKiemThu();
     cout << "Tat ca kiem thu qua. Khoi dong game...\n\n";
 #endif
-    try { TroChoi tc; tc.chay(); }
-    catch (const exception& e) { cerr<<"[LOI NGHIEM TRONG] "<<e.what()<<"\n"; return 1; }
-    catch (...) { cerr<<"[LOI NGHIEM TRONG] Ngoai le khong xac dinh\n"; return 2; }
+    try {
+        TroChoi tro_choi;
+        tro_choi.chay();
+    }
+    catch (const exception& e) { cerr << "[LOI NGHIEM TRONG] " << e.what() << "\n"; return 1; }
+    catch (...)                 { cerr << "[LOI NGHIEM TRONG] Ngoai le khong xac dinh\n"; return 2; }
     return 0;
 }
