@@ -1,7 +1,4 @@
-// ============================================================
-//  XEP HINH - FILE GOC DUY NHAT (private/public/getter/setter)
-//  Tac gia: ---
-//  Mo ta: Toan bo code gop chung, su dung encapsulation dung chuan
+
 // ============================================================
 #include <SFML/Graphics.hpp>
 #include <iostream>
